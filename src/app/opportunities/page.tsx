@@ -1,26 +1,16 @@
+'use client';
+import { useEffect,useMemo,useState } from 'react';
 import Shell from '@/components/Shell';
-
-export default function Opportunities() {
-  return (
-    <Shell>
-      <div className="eyebrow">Revenue Attribution</div>
-      <h1 className="title">Opportunities</h1>
-      <p className="sub">Track the business value created when one member's customer engages another Hive member.</p>
-
-      <div className="grid">
-        <div className="card"><span className="label">New</span><div className="metric">—</div></div>
-        <div className="card"><span className="label">Accepted</span><div className="metric">—</div></div>
-        <div className="card"><span className="label">Won</span><div className="metric">—</div></div>
-        <div className="card"><span className="label">Attributed Revenue</span><div className="metric">—</div></div>
-      </div>
-
-      <section className="section card">
-        <div className="sectionHead"><div><b>Opportunity Pipeline</b><div className="label">Member-specific records appear after secure sign-in</div></div><span className="badge">PRIVATE</span></div>
-        <div style={{padding:'34px 0',textAlign:'center'}}>
-          <h2>No public opportunity data</h2>
-          <p className="sub" style={{maxWidth:680,margin:'8px auto 0'}}>Opportunity details are intentionally protected. Authenticated members will see only opportunities they originated or are authorized to receive.</p>
-        </div>
-      </section>
-    </Shell>
-  );
+import { createBrowserSupabase } from '@/lib/supabase/browser';
+type Opportunity={id:string;status:string;estimated_value:number|null;closed_value:number|null;created_at:string;source_business_id:string;receiving_business_id:string};
+export default function Opportunities(){
+ const [rows,setRows]=useState<Opportunity[]>([]),[loading,setLoading]=useState(true),[signedIn,setSignedIn]=useState(false);
+ useEffect(()=>{(async()=>{const db=createBrowserSupabase();const {data:{user}}=await db.auth.getUser();if(!user){setLoading(false);return;}setSignedIn(true);const {data}=await db.from('opportunities').select('id,status,estimated_value,closed_value,created_at,source_business_id,receiving_business_id').order('created_at',{ascending:false}).limit(100);setRows((data||[]) as Opportunity[]);setLoading(false);})();},[]);
+ const stats=useMemo(()=>({new:rows.filter(r=>r.status==='new').length,accepted:rows.filter(r=>r.status==='accepted').length,won:rows.filter(r=>r.status==='won').length,revenue:rows.reduce((s,r)=>s+Number(r.closed_value||0),0)}),[rows]);
+ return <Shell><div className="eyebrow">Revenue Attribution</div><h1 className="title">Opportunities</h1><p className="sub">Track the business value created when one member's customer engages another Hive member.</p>
+ <div className="grid"><div className="card"><span className="label">New</span><div className="metric">{loading?'—':stats.new}</div></div><div className="card"><span className="label">Accepted</span><div className="metric">{loading?'—':stats.accepted}</div></div><div className="card"><span className="label">Won</span><div className="metric">{loading?'—':stats.won}</div></div><div className="card"><span className="label">Attributed Revenue</span><div className="metric">{loading?'—':stats.revenue.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0})}</div></div></div>
+ <section className="section card"><div className="sectionHead"><div><b>Opportunity Pipeline</b><div className="label">RLS limits records to opportunities your business originated or can receive</div></div><span className="badge">PRIVATE</span></div>
+ {!signedIn&&!loading?<div style={{padding:'34px 0',textAlign:'center'}}><h2>Sign in to view opportunities</h2><p className="sub">Customer and opportunity data stays private to authorized Hive members.</p></div>:null}
+ {signedIn&&!loading&&rows.length===0?<div style={{padding:'34px 0',textAlign:'center'}}><h2>No opportunities yet</h2><p className="sub">Eligible member-generated leads will create attributed opportunities here.</p></div>:null}
+ {rows.length>0?<div style={{display:'grid',gap:10,marginTop:18}}>{rows.map(r=><div className="step" key={r.id}><div><span className="label">{new Date(r.created_at).toLocaleDateString()}</span><b style={{display:'block'}}>Opportunity {r.id.slice(0,8)}</b></div><div><span className="badge">{r.status.toUpperCase()}</span>{r.closed_value?<b style={{marginLeft:12}}>${Number(r.closed_value).toLocaleString()}</b>:null}</div></div>)}</div>:null}</section></Shell>;
 }
