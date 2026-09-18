@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { createPublicClient } from '@/lib/supabase/public';
+import TrackedLink from '@/components/TrackedLink';
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -36,7 +37,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
   const { data: members } = await db
     .from('hive_members')
-    .select('display_order,businesses(id,name,slug,phone,website_url,description,google_rating,google_review_count,services(name,category,description),offers(title,description,cta_label,cta_url,status))')
+    .select('display_order,businesses(id,name,slug,phone,website_url,description,google_rating,google_review_count,services(name,category,description),offers(id,title,description,cta_label,cta_url,status))')
     .eq('hive_id', hive.id)
     .eq('status', 'active')
     .order('display_order');
@@ -95,8 +96,8 @@ export default async function HivePage({ params, searchParams }: PageProps) {
               ) : null}
 
               <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-                {trackedPrimary ? <a className="btn" href={trackedPrimary} rel="noopener noreferrer">{offer?.cta_label || 'Request Service'}</a> : null}
-                {trackedWebsite && trackedWebsite !== trackedPrimary ? <a className="btn secondary" href={trackedWebsite} rel="noopener noreferrer">Visit Website</a> : null}
+                {trackedPrimary ? <TrackedLink className="btn" href={trackedPrimary} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} offerId={offer?.id} eventType={offer ? "offer.clicked" : "member.clicked"}>{offer?.cta_label || "Request Service"}</TrackedLink> : null}
+                {trackedWebsite && trackedWebsite !== trackedPrimary ? <TrackedLink className="btn secondary" href={trackedWebsite} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug}>Visit Website</TrackedLink> : null}
                 {business.phone ? <a className="btn secondary" href={`tel:${business.phone.replace(/[^+\d]/g, '')}`}>Call</a> : null}
               </div>
             </article>
