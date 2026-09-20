@@ -23,11 +23,15 @@ as $function$
   from public.hive_members hm
   join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active'
   where hm.hive_id=p_hive_id and hm.status='active'
+ ),policy as(
+  select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
  ),aud as(
   select count(distinct l.customer_id)::int eligible_audience
   from public.leads l
   join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
-  where l.hive_id=p_hive_id and (l.marketing_email_allowed or l.marketing_sms_allowed)
+  cross join policy p
+  where l.hive_id=p_hive_id
+   and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
  )
  select case when (select ok from authorized) then jsonb_build_object(
   'active_members',m.active_members,
