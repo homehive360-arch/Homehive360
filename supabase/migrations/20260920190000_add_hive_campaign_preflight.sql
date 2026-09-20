@@ -212,3 +212,19 @@ $function$;
 
 revoke all on function public.hive_campaign_funnel(uuid) from public,anon;
 grant execute on function public.hive_campaign_funnel(uuid) to authenticated;
+
+
+-- An active campaign must have an immutable audience snapshot before deliveries
+-- can be queued. This closes the gap between lifecycle state and dispatch state.
+create or replace function public.assert_hive_campaign_dispatch_ready(p_campaign_id uuid)
+returns void language plpgsql security definer set search_path='' as $function$
+declare v_status text;v_frozen timestamptz;
+begin
+ select status,audience_frozen_at into v_status,v_frozen from public.hive_campaigns where id=p_campaign_id;
+ if v_status is null then raise exception 'Campaign not found'; end if;
+ if v_status<>'active' then raise exception 'Campaign must be active before dispatch'; end if;
+ if v_frozen is null then raise exception 'Campaign audience must be frozen before dispatch'; end if;
+end $function$;
+
+revoke all on function public.assert_hive_campaign_dispatch_ready(uuid) from public,anon,authenticated;
+grant execute on function public.assert_hive_campaign_dispatch_ready(uuid) to service_role;
