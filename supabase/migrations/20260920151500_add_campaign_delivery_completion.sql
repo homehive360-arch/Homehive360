@@ -19,7 +19,8 @@ as $function$
   'eligibility_skipped',coalesce(r.deliveries_skipped,0),
   'queue_failures',coalesce(r.deliveries_failed,0),
   'delivery_total',d.total,'queued',d.queued,'sending',d.sending,'sent',d.sent,'delivered',d.delivered,'failed',d.failed,
-  'delivery_complete',(coalesce(r.queue_status,'')='queue_complete' and d.queued=0 and d.sending=0)
+  'dispatch_complete',(coalesce(r.queue_status,'')='queue_complete' and d.queued=0 and d.sending=0),
+  'delivery_complete',(coalesce(r.queue_status,'')='queue_complete' and d.queued=0 and d.sending=0 and d.sent=0)
  ) from d left join r on true
 $function$;
 revoke all on function public.hive_campaign_delivery_status(uuid) from public,anon;
@@ -37,8 +38,8 @@ begin
   where hm.hive_id=v.hive_id and bu.user_id=(select auth.uid()) and bu.role in('owner','admin'))
  then raise exception 'Not authorized to manage this Hive'; end if;
  v_state:=public.hive_campaign_delivery_status(p_campaign_id);
- if coalesce((v_state->>'delivery_complete')::boolean,false)=false
- then raise exception 'Campaign delivery is not complete'; end if;
+ if coalesce((v_state->>'dispatch_complete')::boolean,false)=false
+ then raise exception 'Campaign dispatch is not complete'; end if;
  update public.hive_campaigns set status='completed',updated_at=now() where id=p_campaign_id returning * into v;
  return v;
 end
