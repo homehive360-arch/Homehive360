@@ -28,6 +28,7 @@ begin
   if v.spotlight_offer_id is not null and not exists(select 1 from public.offers o where o.id=v.spotlight_offer_id and o.business_id=v.spotlight_business_id and o.status='active' and (o.starts_at is null or o.starts_at<=v_launch_at) and (o.ends_at is null or o.ends_at>=v_launch_at))
   then raise exception 'Spotlight offer is not valid at launch time'; end if;
   perform public.refresh_hive_campaign_audiences(p_campaign_id);
+  if p_status='active' then perform public.snapshot_hive_campaign_recipients(p_campaign_id); end if;
  end if;
  update public.hive_campaigns set status=p_status,scheduled_at=case when p_status in('scheduled','active') then v_launch_at else scheduled_at end,updated_at=now()
  where id=p_campaign_id returning * into v;
