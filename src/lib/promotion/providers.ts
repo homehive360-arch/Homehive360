@@ -19,7 +19,7 @@ export function mapResendEvent(payload:any):ProviderEvent|null{
  const id=payload?.data?.email_id||payload?.data?.id,type=String(payload?.type||'');
  if(!id)return null;
  if(type==='email.delivered')return{providerMessageId:String(id),status:'delivered'};
- if(['email.bounced','email.delivery_delayed','email.failed'].includes(type))return{providerMessageId:String(id),status:'failed'};
+ if(['email.bounced','email.failed'].includes(type))return{providerMessageId:String(id),status:'failed'};
  return null;
 }
 export function mapTwilioStatus(payload:Record<string,string>):ProviderEvent|null{
