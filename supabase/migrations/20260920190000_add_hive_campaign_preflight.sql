@@ -14,18 +14,23 @@ begin
 
  -- Use the existing fair rotation engine rather than ranking businesses by
  -- performance. Spotlight is premium placement, not a winner/leaderboard.
- select public.next_hive_spotlight_member(p_hive_id) into v_spotlight;
+ select n.business_id into v_spotlight from public.next_hive_spotlight_member(p_hive_id) n limit 1;
  if v_spotlight is null then
   return jsonb_build_object('launch_ready',true,'readiness',v_ready,'spotlight_business_id',null);
  end if;
 
- select count(distinct l.customer_id) filter(where l.source_business_id=v_spotlight),
-        count(distinct l.customer_id) filter(where l.source_business_id<>v_spotlight),
-        count(distinct l.customer_id)
- into v_owned,v_incremental,v_total
- from public.leads l
- join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
- where l.hive_id=p_hive_id and (l.marketing_email_allowed or l.marketing_sms_allowed);
+ with eligible as (
+  select distinct on(l.customer_id) l.customer_id,l.source_business_id
+  from public.leads l
+  join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  where l.hive_id=p_hive_id and l.customer_id is not null
+   and (l.marketing_email_allowed or l.marketing_sms_allowed)
+  order by l.customer_id,l.received_at desc,l.created_at desc,l.id desc
+ )
+ select count(*) filter(where source_business_id=v_spotlight),
+        count(*) filter(where source_business_id<>v_spotlight),
+        count(*)
+ into v_owned,v_incremental,v_total from eligible;
 
  return jsonb_build_object(
   'launch_ready',true,'readiness',v_ready,
@@ -64,7 +69,7 @@ begin
   raise exception 'Hive is not launch ready';
  end if;
 
- select public.next_hive_spotlight_member(p_hive_id) into v_spotlight;
+ select n.business_id into v_spotlight from public.next_hive_spotlight_member(p_hive_id) n limit 1;
  if v_spotlight is null then raise exception 'No eligible Spotlight member'; end if;
 
  -- Delegate month/offer ownership/status/date validation to the canonical
