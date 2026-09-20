@@ -4,7 +4,7 @@ returns jsonb language sql security invoker set search_path='' stable
 as $function$
  with c as(select id,status,scheduled_at,updated_at from public.hive_campaigns where id=p_campaign_id),
  r as(select status queue_status,audience_processed,deliveries_queued,deliveries_skipped,deliveries_failed,updated_at run_updated_at from public.hive_campaign_runs where campaign_id=p_campaign_id),
- d as(select count(*) filter(where status in('queued','sending'))::bigint pending,count(*) filter(where status in('failed','bounced'))::bigint provider_failures from public.promotion_deliveries where campaign_id=p_campaign_id)
+ d as(select count(*) filter(where status in('queued','sending'))::bigint pending,count(*) filter(where status='failed')::bigint provider_failures from public.promotion_deliveries where campaign_id=p_campaign_id)
  select jsonb_build_object(
   'campaign_status',c.status,'queue_status',coalesce(r.queue_status,'not_started'),
   'audience_processed',coalesce(r.audience_processed,0),'queue_failures',coalesce(r.deliveries_failed,0),
