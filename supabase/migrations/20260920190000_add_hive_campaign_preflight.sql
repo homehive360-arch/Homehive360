@@ -51,6 +51,17 @@ grant execute on function public.hive_campaign_preflight(uuid) to authenticated;
 
 -- Guard monthly campaign creation with the same minimum viable network rules
 -- operators see in preflight. This prevents UI/API bypasses.
+-- Serialize campaign planning/creation per Hive so two operators cannot both
+-- pass Spotlight validation concurrently and consume the same rotation slot.
+create or replace function public.lock_hive_campaign_creation(p_hive_id uuid)
+returns void language plpgsql security definer set search_path='' as $function$
+begin
+ perform pg_advisory_xact_lock(hashtextextended('hh360:campaign:'||p_hive_id::text,0));
+end $function$;
+
+revoke all on function public.lock_hive_campaign_creation(uuid) from public,anon,authenticated;
+grant execute on function public.lock_hive_campaign_creation(uuid) to service_role;
+
 create or replace function public.create_launch_ready_monthly_hive_campaign(
  p_hive_id uuid,
  p_campaign_month date,
@@ -61,6 +72,8 @@ language plpgsql security definer set search_path=''
 as $function$
 declare v_ready jsonb;v_spotlight uuid;v_campaign public.hive_campaigns;
 begin
+ -- Transaction-scoped lock makes fair Spotlight selection + campaign insert atomic per Hive.
+ perform pg_advisory_xact_lock(hashtextextended('hh360:campaign:'||p_hive_id::text,0));
  if not exists(
   select 1 from public.hive_members hm
   join public.business_users bu on bu.business_id=hm.business_id
