@@ -5,6 +5,9 @@ create table if not exists public.hive_prospects (
  hive_id uuid not null references public.hives(id) on delete cascade,
  business_id uuid not null references public.businesses(id) on delete cascade,
  category text not null,
+ -- category is the prospect's primary Hive seat, not every service the business offers.
+ -- Exclusivity is scoped to this hive_id only; a business may join other Hives.
+
  roster_state text not null default 'prospective' check(roster_state in('prospective','invited','accepted','declined')),
  invited_at timestamptz,
  accepted_at timestamptz,
@@ -151,6 +154,30 @@ revoke all on function public.hive_build_readiness(uuid) from public,anon;
 grant execute on function public.hive_build_readiness(uuid) to authenticated;
 
 
+
+-- A business can belong to many Hives, but has one authoritative primary seat
+-- inside each Hive. The partial unique index prevents two active competitors
+-- from occupying the same category in the same Hive while allowing that same
+-- category to be occupied in other Hives.
+create table if not exists public.hive_member_seats (
+ id uuid primary key default gen_random_uuid(),
+ hive_id uuid not null references public.hives(id) on delete cascade,
+ business_id uuid not null references public.businesses(id) on delete cascade,
+ category text not null,
+ status text not null default 'active' check(status in('active','inactive')),
+ created_at timestamptz not null default now(),
+ updated_at timestamptz not null default now(),
+ unique(hive_id,business_id)
+);
+create unique index if not exists hive_member_seats_active_category_uq
+ on public.hive_member_seats(hive_id,lower(trim(category))) where status='active';
+alter table public.hive_member_seats enable row level security;
+create policy "active hive members can view seats" on public.hive_member_seats
+for select to authenticated using(exists(
+ select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
+ where hm.hive_id=hive_member_seats.hive_id and hm.status='active' and bu.user_id=(select auth.uid())
+));
+
 create or replace function public.activate_hive_prospect(
  p_hive_id uuid,
  p_business_id uuid
@@ -171,20 +198,24 @@ begin
  if v_prospect.id is null then raise exception 'Hive prospect not found'; end if;
  if v_prospect.roster_state<>'accepted' then raise exception 'Prospect must accept before membership activation'; end if;
 
- -- Preserve category exclusivity at activation even if the roster was created
- -- before another member occupied the same service category.
+ -- Category exclusivity belongs to the Hive seat, not to every service a
+ -- business happens to offer. Existing active members must therefore have an
+ -- authoritative seat assignment before prospect conversion can be enforced.
  if exists(
-  select 1 from public.hive_members hm
-  join public.services s on s.business_id=hm.business_id
-  where hm.hive_id=p_hive_id and hm.status='active'
-   and lower(trim(s.category))=lower(trim(v_prospect.category))
-   and hm.business_id<>p_business_id
+  select 1 from public.hive_member_seats hs
+  where hs.hive_id=p_hive_id and hs.status='active'
+   and lower(trim(hs.category))=lower(trim(v_prospect.category))
+   and hs.business_id<>p_business_id
  ) then raise exception 'Category seat is already occupied by an active Hive member'; end if;
 
  insert into public.hive_members(hive_id,business_id,status)
  values(p_hive_id,p_business_id,'active')
  on conflict(hive_id,business_id) do update set status='active'
  returning * into v_member;
+
+ insert into public.hive_member_seats(hive_id,business_id,category,status)
+ values(p_hive_id,p_business_id,v_prospect.category,'active')
+ on conflict(hive_id,business_id) do update set category=excluded.category,status='active',updated_at=now();
 
  delete from public.hive_prospects where id=v_prospect.id;
  return v_member;
