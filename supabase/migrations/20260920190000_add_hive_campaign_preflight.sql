@@ -83,3 +83,9 @@ $function$;
 
 revoke all on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid) from public,anon;
 grant execute on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid) to authenticated;
+
+
+-- External authenticated callers must use the launch-readiness gate. The lower-level
+-- creator remains available only to the service role for controlled internal work.
+revoke all on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) from authenticated;
+grant execute on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) to service_role;
