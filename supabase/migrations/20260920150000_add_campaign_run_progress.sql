@@ -43,12 +43,14 @@ begin
  select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;if v_hive is null then raise exception 'Campaign not found';end if;
  delete from public.hive_campaign_recipients where campaign_id=p_campaign_id;
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible)
- select p_campaign_id,l.id,l.source_business_id,l.customer_id,l.marketing_email_allowed,l.marketing_sms_allowed from public.leads l
- join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
- where l.hive_id=v_hive and (l.marketing_email_allowed or l.marketing_sms_allowed)
- on conflict(campaign_id,customer_id) do update set
-  email_eligible=hive_campaign_recipients.email_eligible or excluded.email_eligible,
-  sms_eligible=hive_campaign_recipients.sms_eligible or excluded.sms_eligible;
+ select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible from (
+  select distinct on(l.customer_id) l.id lead_id,l.source_business_id,l.customer_id,
+   bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
+   bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
+  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  where l.hive_id=v_hive and (l.marketing_email_allowed or l.marketing_sms_allowed)
+  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id
+ ) x;
  get diagnostics v_count=row_count;return v_count;
 end $function$;
 revoke all on function public.snapshot_hive_campaign_recipients(uuid) from public,anon,authenticated;grant execute on function public.snapshot_hive_campaign_recipients(uuid) to service_role;
