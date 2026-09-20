@@ -13,7 +13,7 @@ export async function POST(request:NextRequest){
  if(!signature||!twilio.validateRequest(authToken,signature,callbackUrl,payload))return NextResponse.json({error:'Invalid webhook signature'},{status:401});
  const event=mapTwilioStatus(payload);if(!event)return NextResponse.json({ok:true,ignored:true});
  const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
- const delivery=(await db.from('promotion_deliveries').select('id,status').eq('provider_message_id',event.providerMessageId).maybeSingle()).data;
+ const lookup=await db.from('promotion_deliveries').select('id,status').eq('provider_message_id',event.providerMessageId).maybeSingle();if(lookup.error)return NextResponse.json({error:'Delivery lookup failed'},{status:500});const delivery=lookup.data;
  if(!delivery)return NextResponse.json({ok:true,ignored:true});
  if(delivery.status===event.status)return NextResponse.json({ok:true,idempotent:true});
  const r=await db.rpc('update_promotion_delivery_atomic',{p_id:delivery.id,p_expected_status:delivery.status,p_status:event.status,p_provider_message_id:event.providerMessageId});
