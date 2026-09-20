@@ -22,15 +22,21 @@ as $function$
   ) ok
  ),policy as(
   select true email_enabled,false sms_enabled
- ),audience as(
-  select l.source_business_id,
-   count(distinct l.customer_id)::bigint audience_customers,
-   count(distinct l.customer_id) filter(where p.email_enabled and l.marketing_email_allowed)::bigint email_eligible,
-   count(distinct l.customer_id) filter(where p.sms_enabled and l.marketing_sms_allowed)::bigint sms_eligible
+ ),eligible as(
+  select distinct on(l.customer_id) l.customer_id,l.source_business_id,
+   p.email_enabled and bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
+   p.sms_enabled and bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
   from public.leads l
+  join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
   cross join policy p
-  where l.hive_id=p_hive_id
-  group by l.source_business_id
+  where l.hive_id=p_hive_id and l.customer_id is not null
+   and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
+  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+ ),audience as(
+  select source_business_id,count(*)::bigint audience_customers,
+   count(*) filter(where email_eligible)::bigint email_eligible,
+   count(*) filter(where sms_eligible)::bigint sms_eligible
+  from eligible group by source_business_id
  )
  select hm.business_id,b.name,hm.status::text,
   coalesce(a.audience_customers,0),
