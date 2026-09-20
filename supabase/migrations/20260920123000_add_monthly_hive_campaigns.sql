@@ -75,6 +75,10 @@ as $function$
  select b.id,b.name,max(c.campaign_month)
  from public.hive_members hm
  join public.businesses b on b.id=hm.business_id
+ -- Only members with an authoritative active category seat participate in
+ -- Spotlight rotation. This keeps incomplete legacy memberships from being
+ -- selected even if the Hive is being repaired concurrently.
+ join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active'
  left join public.hive_campaigns c on c.hive_id=hm.hive_id and c.spotlight_business_id=hm.business_id and c.status<>'cancelled'
  where hm.hive_id=p_hive_id and hm.status='active'
  group by b.id,b.name
