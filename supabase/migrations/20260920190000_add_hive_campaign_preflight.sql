@@ -89,3 +89,25 @@ grant execute on function public.create_launch_ready_monthly_hive_campaign(uuid,
 -- creator remains available only to the service role for controlled internal work.
 revoke all on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) from authenticated;
 grant execute on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) to service_role;
+
+
+-- A campaign audience is immutable once activation begins, including the valid
+-- zero-recipient case. A timestamp is the freeze marker; row count is not.
+alter table public.hive_campaigns add column if not exists audience_frozen_at timestamptz;
+
+create or replace function public.mark_hive_campaign_audience_frozen(p_campaign_id uuid)
+returns timestamptz language plpgsql security definer set search_path=''
+as $function$
+declare v_frozen timestamptz;
+begin
+ update public.hive_campaigns
+ set audience_frozen_at=coalesce(audience_frozen_at,now()),updated_at=now()
+ where id=p_campaign_id
+ returning audience_frozen_at into v_frozen;
+ if v_frozen is null then raise exception 'Campaign not found'; end if;
+ return v_frozen;
+end
+$function$;
+
+revoke all on function public.mark_hive_campaign_audience_frozen(uuid) from public,anon,authenticated;
+grant execute on function public.mark_hive_campaign_audience_frozen(uuid) to service_role;
