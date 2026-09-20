@@ -14,6 +14,9 @@ begin
   if c.spotlight_offer_id is not null and not exists(select 1 from public.offers o where o.id=c.spotlight_offer_id and o.business_id=c.spotlight_business_id and o.status='active' and (o.starts_at is null or o.starts_at<=now()) and (o.ends_at is null or o.ends_at>=now())) then
    update public.hive_campaigns set status='draft',scheduled_at=null,updated_at=now() where id=c.id;continue;
   end if;
+  -- Refresh aggregate reach at the same moment the execution audience freezes,
+  -- so launch reporting and the immutable recipient snapshot share one boundary.
+  perform public.refresh_hive_campaign_audiences(c.id);
   perform public.snapshot_hive_campaign_recipients(c.id);
   update public.hive_campaigns set status='active',updated_at=now() where id=c.id;
   campaign_id:=c.id;return next;
