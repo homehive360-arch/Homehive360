@@ -52,6 +52,12 @@ begin
  ) then raise exception 'Not authorized to build this Hive'; end if;
  if not exists(select 1 from public.businesses where id=p_business_id)
  then raise exception 'Business not found'; end if;
+ if exists(
+  select 1 from public.hive_member_seats hs
+  where hs.hive_id=p_hive_id and hs.status='active'
+   and lower(trim(hs.category))=lower(trim(p_category))
+   and hs.business_id<>p_business_id
+ ) then raise exception 'Category seat is already occupied by an active Hive member'; end if;
  if exists(select 1 from public.hive_members where hive_id=p_hive_id and business_id=p_business_id and status='active')
  then raise exception 'Business is already an active Hive member'; end if;
 
