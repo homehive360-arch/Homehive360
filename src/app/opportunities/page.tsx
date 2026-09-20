@@ -2,7 +2,8 @@
 import {useEffect,useMemo,useState} from 'react';
 import Shell from '@/components/Shell';
 import {createBrowserSupabase} from '@/lib/supabase/browser';
-type Opp={id:string;status:string;estimated_value:number|null;closed_value:number|null;created_at:string;source_business_id:string;receiving_business_id:string;source_businesses:unknown;receiving_businesses:unknown};\ntype Biz={name:string};const bizName=(v:unknown)=>{const x=Array.isArray(v)?v[0]:v;return x&&typeof x==='object'&&'name' in x?String((x as Biz).name):'Business';};
+type Opp={id:string;status:string;estimated_value:number|null;closed_value:number|null;created_at:string;source_business_id:string;receiving_business_id:string;source_businesses:unknown;receiving_businesses:unknown};
+type Biz={name:string};const bizName=(v:unknown)=>{const x=Array.isArray(v)?v[0]:v;return x&&typeof x==='object'&&'name' in x?String((x as Biz).name):'Business';};
 const STAGES=['new','accepted','contacted','qualified','won','lost'];
 export default function Opportunities(){
  const [rows,setRows]=useState<Opp[]>([]);const [loading,setLoading]=useState(true);const [signedIn,setSignedIn]=useState(false);const [busy,setBusy]=useState('');const [manageable,setManageable]=useState<Set<string>>(new Set());
