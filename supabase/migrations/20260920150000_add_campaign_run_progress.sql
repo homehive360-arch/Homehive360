@@ -33,10 +33,7 @@ create table if not exists public.hive_campaign_recipients(
  primary key(campaign_id,lead_id)
 );
 alter table public.hive_campaign_recipients enable row level security;
-create policy "members can view campaign recipients" on public.hive_campaign_recipients for select to authenticated using(exists(
- select 1 from public.hive_campaigns c join public.hive_members hm on hm.hive_id=c.hive_id join public.business_users bu on bu.business_id=hm.business_id
- where c.id=hive_campaign_recipients.campaign_id and bu.user_id=(select auth.uid())
-));
+create policy "members can view campaign recipient counts" on public.hive_campaign_recipients for select to authenticated using(false);
 create or replace function public.snapshot_hive_campaign_recipients(p_campaign_id uuid)
 returns bigint language plpgsql security definer set search_path='' as $function$
 declare v_hive uuid;v_count bigint;
@@ -50,3 +47,15 @@ begin
  get diagnostics v_count=row_count;return v_count;
 end $function$;
 revoke all on function public.snapshot_hive_campaign_recipients(uuid) from public,anon,authenticated;grant execute on function public.snapshot_hive_campaign_recipients(uuid) to service_role;
+
+create or replace function public.hive_campaign_recipient_count(p_campaign_id uuid)
+returns bigint language sql security definer set search_path='' stable as $function$
+ select count(*)::bigint from public.hive_campaign_recipients r
+ where r.campaign_id=p_campaign_id and exists(
+  select 1 from public.hive_campaigns c join public.hive_members hm on hm.hive_id=c.hive_id
+  join public.business_users bu on bu.business_id=hm.business_id
+  where c.id=r.campaign_id and hm.status='active' and bu.user_id=(select auth.uid())
+ );
+$function$;
+revoke all on function public.hive_campaign_recipient_count(uuid) from public,anon;
+grant execute on function public.hive_campaign_recipient_count(uuid) to authenticated;
