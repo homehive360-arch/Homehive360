@@ -1,12 +1,12 @@
 export type SendResult={ok:true;providerMessageId:string}|{ok:false;error:string};
-export type EmailInput={to:string;subject:string;text:string};
+export type EmailInput={to:string;subject:string;text:string;idempotencyKey?:string};
 export type SmsInput={to:string;text:string};
 export type ProviderEvent={providerMessageId:string;status:'delivered'|'failed'};
 
 export async function sendEmail(input:EmailInput):Promise<SendResult>{
  const key=process.env.RESEND_API_KEY,from=process.env.RESEND_FROM_EMAIL;
  if(!key||!from)return{ok:false,error:'Email provider not configured'};
- try{const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({from,to:[input.to],subject:input.subject,text:input.text})});const data=await r.json().catch(()=>({}));if(!r.ok)return{ok:false,error:String(data?.message||'Email provider rejected request')};const providerMessageId=typeof data?.id==='string'?data.id.trim():'';if(!providerMessageId)return{ok:false,error:'Email provider response missing message ID'};return{ok:true,providerMessageId};}catch{return{ok:false,error:'Email provider unavailable'};}
+ try{const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...(input.idempotencyKey?{'Idempotency-Key':input.idempotencyKey}: {})},body:JSON.stringify({from,to:[input.to],subject:input.subject,text:input.text})});const data=await r.json().catch(()=>({}));if(!r.ok)return{ok:false,error:String(data?.message||'Email provider rejected request')};const providerMessageId=typeof data?.id==='string'?data.id.trim():'';if(!providerMessageId)return{ok:false,error:'Email provider response missing message ID'};return{ok:true,providerMessageId};}catch{return{ok:false,error:'Email provider unavailable'};}
 }
 
 export async function sendSms(input:SmsInput):Promise<SendResult>{
