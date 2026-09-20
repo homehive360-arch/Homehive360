@@ -29,13 +29,16 @@ as $function$
   where hs.hive_id=p_hive_id and hs.status='active'
  ),policy as(
   select true email_enabled,false sms_enabled
- ),aud as(
-  select count(distinct l.customer_id)::int eligible_audience
+ ),eligible as(
+  select distinct on(l.customer_id) l.customer_id,l.source_business_id
   from public.leads l
   join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
   cross join policy p
-  where l.hive_id=p_hive_id
+  where l.hive_id=p_hive_id and l.customer_id is not null
    and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
+  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+ ),aud as(
+  select count(*)::int eligible_audience from eligible
  )
  select case when (select ok from authorized) then jsonb_build_object(
   'active_members',m.active_members,
