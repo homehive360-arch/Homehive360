@@ -17,7 +17,7 @@ for select to authenticated using(exists(
  select 1 from public.hive_campaigns c
  join public.hive_members hm on hm.hive_id=c.hive_id
  join public.business_users bu on bu.business_id=hm.business_id
- where c.id=hive_campaign_audiences.campaign_id and bu.user_id=(select auth.uid())
+ where c.id=hive_campaign_audiences.campaign_id and hm.status='active' and bu.user_id=(select auth.uid())
 ));
 
 create or replace function public.refresh_hive_campaign_audiences(p_campaign_id uuid)
@@ -32,7 +32,7 @@ begin
  if v_hive is null then raise exception 'Campaign not found'; end if;
  if not exists(
   select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
-  where hm.hive_id=v_hive and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
+  where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
  ) then raise exception 'Not authorized to manage this Hive'; end if;
 
  insert into public.hive_campaign_audiences(campaign_id,source_business_id,eligible_customers,email_eligible,sms_eligible)
