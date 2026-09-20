@@ -8,9 +8,10 @@ begin
  select * into c from public.hive_campaigns where id=p_campaign_id and status='active';if c.id is null then raise exception 'Campaign must be active';end if;
  select * into r from public.hive_campaign_runs where campaign_id=p_campaign_id;
  if r.status='queue_complete' then return jsonb_build_object('status','queue_complete','processed',0,'queued',0,'skipped',0,'failed',0);end if;
- for l in select cr.lead_id as id,cr.email_eligible as marketing_email_allowed,cr.sms_eligible as marketing_sms_allowed from public.hive_campaign_recipients cr where cr.campaign_id=p_campaign_id and (r.last_lead_id is null or cr.lead_id>r.last_lead_id) order by cr.lead_id limit greatest(1,least(p_limit,1000))
+ for l in select cr.lead_id as id,cr.customer_id,cr.source_business_id,cr.email_eligible as marketing_email_allowed,cr.sms_eligible as marketing_sms_allowed from public.hive_campaign_recipients cr where cr.campaign_id=p_campaign_id and (r.last_lead_id is null or cr.lead_id>r.last_lead_id) order by cr.lead_id limit greatest(1,least(p_limit,1000))
  loop
   v_processed:=v_processed+1;v_last:=l.id;v_channel:=null;
+  if not exists(select 1 from public.leads live where live.id=l.id and live.customer_id=l.customer_id and live.source_business_id=l.source_business_id and live.hive_id=c.hive_id) then v_skipped:=v_skipped+1;continue;end if;
   if c.email_enabled and l.marketing_email_allowed then v_channel:='email';elsif c.sms_enabled and l.marketing_sms_allowed then v_channel:='sms';end if;
   if v_channel is null then v_skipped:=v_skipped+1;continue;end if;
   begin perform public.queue_hive_campaign_delivery(p_campaign_id,l.id,v_channel);v_queued:=v_queued+1;
