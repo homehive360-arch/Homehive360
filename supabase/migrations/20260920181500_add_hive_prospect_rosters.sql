@@ -232,6 +232,10 @@ begin
  if v_prospect.id is null then raise exception 'Hive prospect not found'; end if;
  if v_prospect.roster_state<>'accepted' then raise exception 'Prospect must accept before membership activation'; end if;
 
+ -- Serialize prospect conversion with every other reservation/write for this
+ -- Hive category. The seat trigger uses the same advisory-lock key.
+ perform pg_advisory_xact_lock(hashtextextended('hh360:seat:'||p_hive_id::text||':'||lower(trim(v_prospect.category)),0));
+
  -- Category exclusivity belongs to the Hive seat, not to every service a
  -- business happens to offer. Existing active members must therefore have an
  -- authoritative seat assignment before prospect conversion can be enforced.
