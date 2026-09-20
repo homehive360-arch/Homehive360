@@ -13,7 +13,7 @@ const selected=[
 const open=['HVAC','Plumbing','Pest Control','House Cleaning','Painting','Handyman','Pressure Washing','Windows & Doors','Garage Doors','Flooring','Restoration'];
 
 export default function BrunswickDemoHive(){
- const [seats,setSeats]=useState(()=>Object.fromEntries(selected));
+ const [seats,setSeats]=useState<Record<string,string>>(()=>Object.fromEntries(selected));
  const [states,setStates]=useState<Record<string,string>>(()=>Object.fromEntries(selected.map(x=>[x[0],'prospective'])));
  const [query,setQuery]=useState('');
  const categories=useMemo(()=>[...selected.map(x=>x[0]),...open].filter(x=>x.toLowerCase().includes(query.toLowerCase())),[query]);
