@@ -224,3 +224,31 @@ $function$;
 
 revoke all on function public.activate_hive_prospect(uuid,uuid) from public,anon;
 grant execute on function public.activate_hive_prospect(uuid,uuid) to authenticated;
+
+
+-- Market identity is deliberately non-unique: one market can contain many Hives.
+alter table public.hives add column if not exists market_key text;
+alter table public.hives add column if not exists market_sequence integer;
+alter table public.hives add column if not exists market_label text;
+
+create unique index if not exists hives_market_sequence_uq
+ on public.hives(lower(trim(market_key)),market_sequence)
+ where market_key is not null and market_sequence is not null;
+
+create or replace function public.next_hive_market_sequence(p_market_key text)
+returns integer language sql security invoker set search_path='' stable
+as $function$
+ select coalesce(max(h.market_sequence),0)+1
+ from public.hives h
+ where lower(trim(h.market_key))=lower(trim(p_market_key))
+$function$;
+
+revoke all on function public.next_hive_market_sequence(text) from public,anon;
+grant execute on function public.next_hive_market_sequence(text) to authenticated;
+
+-- Example:
+-- market_key = 'brunswick-ga'
+-- market_sequence = 1, 2, 3...
+-- market_label = 'Brunswick / Golden Isles'
+-- No uniqueness constraint exists on market_key itself. Competition boundaries
+-- remain the category seats inside each individual Hive.
