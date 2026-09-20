@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {authorizeBusinessKey} from '@/lib/api/businessKey';
 import {consumeRateLimit} from '@/lib/api/rateLimit';
-const allowed:Record<string,string[]>={queued:['sent','failed'],sent:['delivered','failed'],delivered:[],failed:[]};
+const allowed:Record<string,string[]>={queued:['sent','failed'],sending:['sent','failed'],sent:['delivered','failed'],delivered:[],failed:[]};
 export async function POST(request:NextRequest){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL,secret=process.env.SUPABASE_SECRET_KEY;if(!url||!secret)return NextResponse.json({error:'Not configured'},{status:503});
  let body:{delivery_id?:string;provider_message_id?:string;status?:'sent'|'delivered'|'failed'};try{body=await request.json();}catch{return NextResponse.json({error:'Invalid JSON'},{status:400});}
