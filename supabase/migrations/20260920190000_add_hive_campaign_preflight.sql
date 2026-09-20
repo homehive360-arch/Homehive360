@@ -19,13 +19,16 @@ begin
   return jsonb_build_object('launch_ready',true,'readiness',v_ready,'spotlight_business_id',null);
  end if;
 
- with eligible as (
+ with policy as (
+  select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
+ ), eligible as (
   select distinct on(l.customer_id) l.customer_id,l.source_business_id
   from public.leads l
   join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  cross join policy p
   where l.hive_id=p_hive_id and l.customer_id is not null
-   and (l.marketing_email_allowed or l.marketing_sms_allowed)
-  order by l.customer_id,l.received_at desc,l.created_at desc,l.id desc
+   and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
+  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
  )
  select count(*) filter(where source_business_id=v_spotlight),
         count(*) filter(where source_business_id<>v_spotlight),
