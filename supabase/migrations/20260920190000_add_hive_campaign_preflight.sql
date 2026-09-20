@@ -130,8 +130,8 @@ begin
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible)
  select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible from (
   select distinct on(l.customer_id) l.id lead_id,l.source_business_id,l.customer_id,
-   bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
-   bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
+   p.email_enabled and bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
+   p.sms_enabled and bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
   from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
   join public.hive_campaign_policy p on p.hive_id=l.hive_id
   where l.hive_id=v_hive and l.customer_id is not null
