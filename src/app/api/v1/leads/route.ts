@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {authorizeBusinessKey} from '@/lib/api/businessKey';
+import {consumeRateLimit} from '@/lib/api/rateLimit';
 import {rankPromotionCandidates} from '@/lib/promotion/rank';
 type LeadPayload={first_name?:string;last_name?:string;email?:string;phone?:string;zip?:string;service?:string;source?:string;external_lead_id?:string;marketing_email_allowed?:boolean;marketing_sms_allowed?:boolean;metadata?:Record<string,unknown>;hive_id?:string;hive_slug?:string};
 const emailOf=(v?:string)=>v?.trim().toLowerCase()||null;
