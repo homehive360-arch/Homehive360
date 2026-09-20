@@ -62,8 +62,8 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
       {source ? (
         <div className="card" style={{ marginTop: 24, padding: 18 }}>
-          <b>Referred by {source.name}</b>
-          <div className="label" style={{ marginTop: 5 }}>Explore trusted businesses in the same local Home Hive network.</div>
+          <b>Shared with you by {source.name}</b>
+          <div className="label" style={{ marginTop: 5 }}>Explore complementary local businesses promoted through the same Home Hive network. Your relationship remains with the business you already know.</div>
         </div>
       ) : null}
 
