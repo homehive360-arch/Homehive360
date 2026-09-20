@@ -1,18 +1,14 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {createClient} from '@supabase/supabase-js';
-import {createHash} from 'crypto';
+import {authorizeBusinessKey} from '@/lib/api/businessKey';
 import {rankPromotionCandidates} from '@/lib/promotion/rank';
 type LeadPayload={first_name?:string;last_name?:string;email?:string;phone?:string;zip?:string;service?:string;source?:string;external_lead_id?:string;marketing_email_allowed?:boolean;marketing_sms_allowed?:boolean;metadata?:Record<string,unknown>;hive_id?:string;hive_slug?:string};
 const emailOf=(v?:string)=>v?.trim().toLowerCase()||null;
 const phoneOf=(v?:string)=>{const d=v?.replace(/\D/g,'')||'';return d.length>=10?d:null;};
 export async function POST(request:NextRequest){
- const apiKey=request.headers.get('x-hh360-key');if(!apiKey)return NextResponse.json({error:'Missing x-hh360-key credential.'},{status:401});
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL,secret=process.env.SUPABASE_SECRET_KEY;if(!url||!secret)return NextResponse.json({error:'Lead ingestion is not configured.'},{status:503});
  let body:LeadPayload;try{body=await request.json();}catch{return NextResponse.json({error:'Request body must be valid JSON.'},{status:400});}
  const email=emailOf(body.email),phone=phoneOf(body.phone);if(!body.first_name?.trim())return NextResponse.json({error:'Missing required field: first_name'},{status:422});if(!email&&!phone)return NextResponse.json({error:'A valid email or phone is required.'},{status:422});
- const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});const keyHash=createHash('sha256').update(apiKey).digest('hex');
- const key=(await admin.from('business_api_keys').select('id,business_id').eq('key_hash',keyHash).eq('is_active',true).maybeSingle()).data;if(!key)return NextResponse.json({error:'Invalid API key.'},{status:401});
- await admin.from('business_api_keys').update({last_used_at:new Date().toISOString()}).eq('id',key.id);
+ const authResult=await authorizeBusinessKey(request,url,secret);if(!authResult.ok)return NextResponse.json({error:authResult.error},{status:authResult.status});const admin=authResult.auth.db,key={id:authResult.auth.keyId,business_id:authResult.auth.businessId};
  const memberships=(await admin.from('hive_members').select('hive_id,hives(slug)').eq('business_id',key.business_id).eq('status','active')).data||[];if(!memberships.length)return NextResponse.json({error:'Business is not an active Hive member.'},{status:403});let membership:any=null;if(body.hive_id)membership=memberships.find((m:any)=>m.hive_id===body.hive_id);else if(body.hive_slug)membership=memberships.find((m:any)=>m.hives?.slug===body.hive_slug);else if(memberships.length===1)membership=memberships[0];else return NextResponse.json({error:'Multiple active Hives found. Supply hive_id or hive_slug.'},{status:422});if(!membership)return NextResponse.json({error:'Business is not an active member of the requested Hive.'},{status:403});
  let selected:any[]=[];const promotionAllowed=body.marketing_email_allowed===true||body.marketing_sms_allowed===true;
  if(promotionAllowed){const members=(await admin.from('hive_members').select('business_id,businesses(name,services(category))').eq('hive_id',membership.hive_id).eq('status','active')).data||[];const ids=members.map((m:any)=>m.business_id).filter((id:string)=>id!==key.business_id);const offers=ids.length?(await admin.from('offers').select('id,business_id,title').or(`hive_id.eq.${membership.hive_id},hive_id.is.null`).eq('status','active').in('business_id',ids)).data||[]:[];const offerBy=new Map(offers.map((o:any)=>[o.business_id,o]));const candidates=members.map((m:any)=>{const offer:any=offerBy.get(m.business_id);return{businessId:m.business_id,businessName:m.businesses?.name||'Hive Member',category:m.businesses?.services?.[0]?.category||null,offerId:offer?.id,offerTitle:offer?.title};});selected=rankPromotionCandidates({sourceBusinessId:key.business_id,serviceRequested:body.service,members:candidates});}
