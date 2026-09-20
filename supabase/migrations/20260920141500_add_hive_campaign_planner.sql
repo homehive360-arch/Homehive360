@@ -11,7 +11,7 @@ declare v_next uuid;v_name text;v_last date;v_owned bigint;v_incremental bigint;
 begin
  if not exists(
   select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
-  where hm.hive_id=p_hive_id and bu.user_id=(select auth.uid())
+  where hm.hive_id=p_hive_id and hm.status='active' and bu.user_id=(select auth.uid())
  ) then raise exception 'Not authorized to view this Hive'; end if;
 
  select n.business_id,n.business_name,n.last_spotlight_month
