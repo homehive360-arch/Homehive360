@@ -140,3 +140,38 @@ end $function$;
 
 revoke all on function public.snapshot_hive_campaign_recipients(uuid) from public,anon,authenticated;
 grant execute on function public.snapshot_hive_campaign_recipients(uuid) to service_role;
+
+
+-- Keep aggregate reach reporting aligned with the immutable recipient snapshot.
+-- Once frozen, reach is derived from the actual campaign recipients rather than
+-- mutable lead records or pre-launch projections.
+create or replace function public.hive_campaign_reach(p_campaign_id uuid)
+returns jsonb language sql security invoker set search_path='' stable as $function$
+ with c as(
+  select spotlight_business_id,audience_frozen_at from public.hive_campaigns where id=p_campaign_id
+ ), frozen as(
+  select count(*)::bigint total_reach,
+   count(*) filter(where r.source_business_id=(select spotlight_business_id from c))::bigint owned_reach,
+   count(*) filter(where r.source_business_id<>(select spotlight_business_id from c))::bigint incremental_hive_reach,
+   count(*) filter(where r.email_eligible)::bigint email_reach,
+   count(*) filter(where r.sms_eligible)::bigint sms_reach
+  from public.hive_campaign_recipients r where r.campaign_id=p_campaign_id
+ ), projected as(
+  select coalesce(sum(a.eligible_customers),0)::bigint total_reach,
+   coalesce(sum(a.eligible_customers) filter(where a.source_business_id=(select spotlight_business_id from c)),0)::bigint owned_reach,
+   coalesce(sum(a.eligible_customers) filter(where a.source_business_id<>(select spotlight_business_id from c)),0)::bigint incremental_hive_reach,
+   coalesce(sum(a.email_eligible),0)::bigint email_reach,
+   coalesce(sum(a.sms_eligible),0)::bigint sms_reach
+  from public.hive_campaign_audiences a where a.campaign_id=p_campaign_id
+ ), chosen as(
+  select * from frozen where (select audience_frozen_at from c) is not null
+  union all
+  select * from projected where (select audience_frozen_at from c) is null
+ )
+ select jsonb_build_object('owned_reach',owned_reach,'incremental_hive_reach',incremental_hive_reach,
+  'total_reach',total_reach,'email_reach',email_reach,'sms_reach',sms_reach,
+  'audience_frozen',(select audience_frozen_at is not null from c)) from chosen
+$function$;
+
+revoke all on function public.hive_campaign_reach(uuid) from public,anon;
+grant execute on function public.hive_campaign_reach(uuid) to authenticated;
