@@ -244,11 +244,11 @@ create unique index if not exists hives_market_sequence_uq
  where market_key is not null and market_sequence is not null;
 
 create or replace function public.next_hive_market_sequence(p_market_key text)
-returns integer language sql security invoker set search_path='' stable
+returns integer language sql security invoker set search_path='' volatile
 as $function$
  select coalesce(max(h.market_sequence),0)+1
  from public.hives h
- where lower(trim(h.market_key))=lower(trim(p_market_key))
+ where lower(trim(h.market_key))=lower(trim(p_market_key)) and nullif(trim(p_market_key),'') is not null
 $function$;
 
 revoke all on function public.next_hive_market_sequence(text) from public,anon;
