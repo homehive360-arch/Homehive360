@@ -4,7 +4,7 @@ create or replace function public.queue_hive_campaign_delivery(
 ) returns public.promotion_deliveries
 language plpgsql security definer set search_path=''
 as $function$
-declare v_campaign public.hive_campaigns;v_lead public.leads;v_delivery public.promotion_deliveries;v_elig jsonb;
+declare v_campaign public.hive_campaigns;v_lead public.leads;v_delivery public.promotion_deliveries;v_elig jsonb;v_queued jsonb;
 begin
  select * into v_campaign from public.hive_campaigns where id=p_campaign_id;
  if v_campaign.id is null then raise exception 'Campaign not found'; end if;
@@ -22,7 +22,9 @@ begin
  if coalesce((v_elig->>'eligible')::boolean,false)=false
  then raise exception 'Campaign delivery ineligible: %',coalesce(v_elig->>'reason','unknown'); end if;
 
- v_delivery:=public.queue_promotion_delivery_atomic(p_lead_id,p_channel);
+ v_queued:=public.queue_promotion_delivery_atomic(p_lead_id,p_channel);
+ select * into v_delivery from public.promotion_deliveries where id=(v_queued->>'id')::uuid;
+ if v_delivery.id is null then raise exception 'Promotion delivery was not created'; end if;
  if v_delivery.campaign_id is not null and v_delivery.campaign_id<>p_campaign_id then raise exception 'Delivery is already assigned to another campaign'; end if;
  begin
   update public.promotion_deliveries set campaign_id=p_campaign_id where id=v_delivery.id returning * into v_delivery;
