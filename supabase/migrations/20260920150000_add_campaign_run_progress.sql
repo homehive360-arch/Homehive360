@@ -31,7 +31,8 @@ create table if not exists public.hive_campaign_recipients(
  email_eligible boolean not null default false,
  sms_eligible boolean not null default false,
  created_at timestamptz not null default now(),
- primary key(campaign_id,lead_id)
+ primary key(campaign_id,lead_id),
+ unique(campaign_id,customer_id)
 );
 alter table public.hive_campaign_recipients enable row level security;
 create policy "members can view campaign recipient counts" on public.hive_campaign_recipients for select to authenticated using(false);
@@ -44,7 +45,10 @@ begin
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible)
  select p_campaign_id,l.id,l.source_business_id,l.customer_id,l.marketing_email_allowed,l.marketing_sms_allowed from public.leads l
  join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
- where l.hive_id=v_hive and (l.marketing_email_allowed or l.marketing_sms_allowed);
+ where l.hive_id=v_hive and (l.marketing_email_allowed or l.marketing_sms_allowed)
+ on conflict(campaign_id,customer_id) do update set
+  email_eligible=hive_campaign_recipients.email_eligible or excluded.email_eligible,
+  sms_eligible=hive_campaign_recipients.sms_eligible or excluded.sms_eligible;
  get diagnostics v_count=row_count;return v_count;
 end $function$;
 revoke all on function public.snapshot_hive_campaign_recipients(uuid) from public,anon,authenticated;grant execute on function public.snapshot_hive_campaign_recipients(uuid) to service_role;
