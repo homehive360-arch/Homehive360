@@ -20,6 +20,8 @@ create unique index if not exists hive_prospects_open_category_uq
  on public.hive_prospects(hive_id,lower(trim(category)))
  where roster_state in('prospective','invited','accepted');
 
+-- The database, not only RPCs, owns category-seat exclusivity.
+
 create index if not exists hive_prospects_hive_state_idx on public.hive_prospects(hive_id,roster_state,category);
 
 alter table public.hive_prospects enable row level security;
@@ -179,6 +181,25 @@ create table if not exists public.hive_member_seats (
 );
 create unique index if not exists hive_member_seats_active_category_uq
  on public.hive_member_seats(hive_id,lower(trim(category))) where status='active';
+
+create or replace function public.guard_hive_category_seat()
+returns trigger language plpgsql security definer set search_path=''
+as $function$
+begin
+ if new.status='active' and exists(
+  select 1 from public.hive_prospects hp
+  where hp.hive_id=new.hive_id
+   and hp.roster_state in('prospective','invited','accepted')
+   and lower(trim(hp.category))=lower(trim(new.category))
+   and hp.business_id<>new.business_id
+ ) then raise exception 'Category seat is reserved by an active prospect'; end if;
+ return new;
+end
+$function$;
+
+drop trigger if exists guard_hive_category_seat on public.hive_member_seats;
+create trigger guard_hive_category_seat before insert or update of hive_id,business_id,category,status
+on public.hive_member_seats for each row execute function public.guard_hive_category_seat();
 alter table public.hive_member_seats enable row level security;
 create policy "active hive members can view seats" on public.hive_member_seats
 for select to authenticated using(exists(
