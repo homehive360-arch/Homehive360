@@ -47,7 +47,18 @@ export default async function HivePage({ params, searchParams }: PageProps) {
   const source = ref
     ? activeMembers.map((member: any) => member.businesses).find((business: any) => business.slug === ref)
     : null;
-  const visibleMembers = source ? activeMembers.filter((member: any) => member.businesses?.id !== source.id) : activeMembers;
+
+  let campaign:any=null;
+  if(pid){
+    const {data:delivery}=await db.from('promotion_deliveries').select('campaign_id').eq('tracking_token',pid).maybeSingle();
+    if(delivery?.campaign_id){
+      const {data}=await db.from('hive_campaigns').select('id,name,spotlight_business_id,spotlight_offer_id,businesses!hive_campaigns_spotlight_business_id_fkey(id,name,slug,logo_url,description,website_url,phone),offers!hive_campaigns_spotlight_offer_id_fkey(id,title,description,cta_label,cta_url)').eq('id',delivery.campaign_id).eq('hive_id',hive.id).maybeSingle();
+      campaign=data;
+    }
+  }
+  const visibleMembers = activeMembers;
+  const spotlightBusiness=(Array.isArray(campaign?.businesses)?campaign.businesses[0]:campaign?.businesses) as any;
+  const spotlightOffer=(Array.isArray(campaign?.offers)?campaign.offers[0]:campaign?.offers) as any;
 
   return (
     <main style={{ maxWidth: 1180, margin: '0 auto', padding: '52px 22px' }}>
@@ -67,9 +78,19 @@ export default async function HivePage({ params, searchParams }: PageProps) {
         </div>
       ) : null}
 
+      {spotlightBusiness ? <section className="card" style={{marginTop:24,padding:24,borderWidth:2}}>
+        <div className="eyebrow">THIS MONTH'S HOME HIVE SPOTLIGHT</div>
+        <div style={{display:'flex',gap:20,alignItems:'center',flexWrap:'wrap'}}>
+          {spotlightBusiness.logo_url?<img src={spotlightBusiness.logo_url} alt={spotlightBusiness.name+' logo'} style={{maxWidth:180,maxHeight:72,objectFit:'contain'}}/>:null}
+          <div style={{flex:1,minWidth:260}}><h2 style={{marginBottom:6}}>{spotlightBusiness.name}</h2><p className="sub">{spotlightBusiness.description||'A featured member of your trusted local Home Hive.'}</p>
+          {spotlightOffer?<div className="step"><span className="label">EXCLUSIVE MONTHLY OFFER</span><b style={{fontSize:20}}>{spotlightOffer.title}</b>{spotlightOffer.description?<p className="label">{spotlightOffer.description}</p>:null}</div>:null}
+          {spotlightOffer?.cta_url?<TrackedLink className="btn" href={outboundUrl(spotlightOffer.cta_url,slug,spotlightBusiness.slug,source?.slug)} hiveSlug={slug} businessSlug={spotlightBusiness.slug} sourceSlug={source?.slug} pid={pid} offerId={spotlightOffer.id} eventType="offer.clicked">{spotlightOffer.cta_label||'View Spotlight Offer'}</TrackedLink>:null}</div>
+        </div>
+      </section>:null}
+
       <div className="sectionHead" style={{ marginTop: 34 }}>
         <h2>Meet your Home Hive</h2>
-        <span className="badge">{visibleMembers.length} {source ? 'TRUSTED OPTIONS' : 'MEMBERS'} · LOCAL · CONNECTED</span>
+        <span className="badge">{visibleMembers.length} MEMBERS · LOCAL · CONNECTED</span>
       </div>
 
       <div className="grid">
