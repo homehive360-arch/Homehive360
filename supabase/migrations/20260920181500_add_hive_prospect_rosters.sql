@@ -36,6 +36,49 @@ for select to authenticated using(exists(
   and bu.role in('owner','admin')
 ));
 
+-- A business can belong to many Hives, but has one authoritative primary seat
+-- inside each Hive. The partial unique index prevents two active competitors
+-- from occupying the same category in the same Hive while allowing that same
+-- category to be occupied in other Hives.
+create table if not exists public.hive_member_seats (
+ id uuid primary key default gen_random_uuid(),
+ hive_id uuid not null references public.hives(id) on delete cascade,
+ business_id uuid not null references public.businesses(id) on delete cascade,
+ category text not null,
+ status text not null default 'active' check(status in('active','inactive')),
+ created_at timestamptz not null default now(),
+ updated_at timestamptz not null default now(),
+ unique(hive_id,business_id)
+);
+create unique index if not exists hive_member_seats_active_category_uq
+ on public.hive_member_seats(hive_id,lower(trim(category))) where status='active';
+
+create or replace function public.guard_hive_category_seat()
+returns trigger language plpgsql security definer set search_path=''
+as $function$
+begin
+ if new.status='active' and exists(
+  select 1 from public.hive_prospects hp
+  where hp.hive_id=new.hive_id
+   and hp.roster_state in('prospective','invited','accepted')
+   and lower(trim(hp.category))=lower(trim(new.category))
+   and hp.business_id<>new.business_id
+ ) then raise exception 'Category seat is reserved by an active prospect'; end if;
+ return new;
+end
+$function$;
+
+drop trigger if exists guard_hive_category_seat on public.hive_member_seats;
+create trigger guard_hive_category_seat before insert or update of hive_id,business_id,category,status
+on public.hive_member_seats for each row execute function public.guard_hive_category_seat();
+alter table public.hive_member_seats enable row level security;
+create policy "active hive members can view seats" on public.hive_member_seats
+for select to authenticated using(exists(
+ select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
+ where hm.hive_id=hive_member_seats.hive_id and hm.status='active' and bu.user_id=(select auth.uid())
+));
+
+
 create or replace function public.set_hive_prospect(
  p_hive_id uuid,
  p_business_id uuid,
@@ -164,48 +207,6 @@ revoke all on function public.hive_build_readiness(uuid) from public,anon;
 grant execute on function public.hive_build_readiness(uuid) to authenticated;
 
 
-
--- A business can belong to many Hives, but has one authoritative primary seat
--- inside each Hive. The partial unique index prevents two active competitors
--- from occupying the same category in the same Hive while allowing that same
--- category to be occupied in other Hives.
-create table if not exists public.hive_member_seats (
- id uuid primary key default gen_random_uuid(),
- hive_id uuid not null references public.hives(id) on delete cascade,
- business_id uuid not null references public.businesses(id) on delete cascade,
- category text not null,
- status text not null default 'active' check(status in('active','inactive')),
- created_at timestamptz not null default now(),
- updated_at timestamptz not null default now(),
- unique(hive_id,business_id)
-);
-create unique index if not exists hive_member_seats_active_category_uq
- on public.hive_member_seats(hive_id,lower(trim(category))) where status='active';
-
-create or replace function public.guard_hive_category_seat()
-returns trigger language plpgsql security definer set search_path=''
-as $function$
-begin
- if new.status='active' and exists(
-  select 1 from public.hive_prospects hp
-  where hp.hive_id=new.hive_id
-   and hp.roster_state in('prospective','invited','accepted')
-   and lower(trim(hp.category))=lower(trim(new.category))
-   and hp.business_id<>new.business_id
- ) then raise exception 'Category seat is reserved by an active prospect'; end if;
- return new;
-end
-$function$;
-
-drop trigger if exists guard_hive_category_seat on public.hive_member_seats;
-create trigger guard_hive_category_seat before insert or update of hive_id,business_id,category,status
-on public.hive_member_seats for each row execute function public.guard_hive_category_seat();
-alter table public.hive_member_seats enable row level security;
-create policy "active hive members can view seats" on public.hive_member_seats
-for select to authenticated using(exists(
- select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
- where hm.hive_id=hive_member_seats.hive_id and hm.status='active' and bu.user_id=(select auth.uid())
-));
 
 create or replace function public.activate_hive_prospect(
  p_hive_id uuid,
