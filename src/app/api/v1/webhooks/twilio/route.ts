@@ -1,13 +1,14 @@
 import {createClient} from '@supabase/supabase-js';
 import {NextRequest,NextResponse} from 'next/server';
+import twilio from 'twilio';
 import {mapTwilioStatus} from '@/lib/promotion/providers';
 
 export async function POST(request:NextRequest){
- const url=process.env.NEXT_PUBLIC_SUPABASE_URL,secret=process.env.SUPABASE_SECRET_KEY,webhookSecret=process.env.TWILIO_WEBHOOK_SECRET;
- if(!url||!secret||!webhookSecret)return NextResponse.json({error:'Not configured'},{status:503});
- const supplied=request.headers.get('x-hh360-webhook-secret');
- if(!supplied||supplied!==webhookSecret)return NextResponse.json({error:'Unauthorized'},{status:401});
+ const url=process.env.NEXT_PUBLIC_SUPABASE_URL,secret=process.env.SUPABASE_SECRET_KEY,authToken=process.env.TWILIO_AUTH_TOKEN;
+ if(!url||!secret||!authToken)return NextResponse.json({error:'Not configured'},{status:503});
  const form=await request.formData();const payload:Record<string,string>={};form.forEach((v,k)=>{payload[k]=String(v)});
+ const signature=request.headers.get('x-twilio-signature')||'';
+ if(!signature||!twilio.validateRequest(authToken,signature,request.url,payload))return NextResponse.json({error:'Invalid webhook signature'},{status:401});
  const event=mapTwilioStatus(payload);if(!event)return NextResponse.json({ok:true,ignored:true});
  const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
  const delivery=(await db.from('promotion_deliveries').select('id,status').eq('provider_message_id',event.providerMessageId).maybeSingle()).data;
