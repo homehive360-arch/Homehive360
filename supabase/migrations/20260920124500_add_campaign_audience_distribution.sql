@@ -26,9 +26,9 @@ language plpgsql
 security definer
 set search_path=''
 as $function$
-declare v_hive uuid;
+declare v_hive uuid;v_email boolean;v_sms boolean;
 begin
- select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;
+ select hive_id,email_enabled,sms_enabled into v_hive,v_email,v_sms from public.hive_campaigns where id=p_campaign_id;
  if v_hive is null then raise exception 'Campaign not found'; end if;
  if not exists(
   select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
@@ -37,9 +37,9 @@ begin
 
  insert into public.hive_campaign_audiences(campaign_id,source_business_id,eligible_customers,email_eligible,sms_eligible)
  select p_campaign_id,hm.business_id,
-  count(distinct l.customer_id) filter(where l.marketing_email_allowed or l.marketing_sms_allowed),
-  count(distinct l.customer_id) filter(where l.marketing_email_allowed),
-  count(distinct l.customer_id) filter(where l.marketing_sms_allowed)
+  count(distinct l.customer_id) filter(where (v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed)),
+  count(distinct l.customer_id) filter(where v_email and l.marketing_email_allowed),
+  count(distinct l.customer_id) filter(where v_sms and l.marketing_sms_allowed)
  from public.hive_members hm
  left join public.leads l on l.hive_id=hm.hive_id and l.source_business_id=hm.business_id
  where hm.hive_id=v_hive and hm.status='active'
