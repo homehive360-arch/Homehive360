@@ -1,5 +1,9 @@
 -- Full monthly campaign funnel, including delivery, engagement, opportunity,
 -- wins and revenue. Event attribution follows promotion delivery tracking.
+-- Ensure the event attribution key exists before compiling the funnel function.
+alter table public.events add column if not exists promotion_delivery_id uuid references public.promotion_deliveries(id) on delete set null;
+create index if not exists events_promotion_delivery_idx on public.events(promotion_delivery_id,occurred_at desc);
+
 create or replace function public.hive_campaign_funnel(p_campaign_id uuid)
 returns jsonb
 language sql security invoker set search_path='' stable
@@ -25,7 +29,7 @@ as $function$
    count(*) filter(where status='sending')::bigint sending,
    count(*) filter(where status='sent')::bigint sent,
    count(*) filter(where status='delivered')::bigint delivered,
-   count(*) filter(where status in('failed','bounced'))::bigint failed
+   count(*) filter(where status='failed')::bigint failed
   from d
  ),r as(
   select audience_processed,deliveries_skipped,deliveries_failed,status queue_status
