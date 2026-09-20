@@ -44,7 +44,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
     .order('display_order');
 
   const activeMembers = (members || []).filter((member: any) => member.businesses);
-  const source = ref
+  const refSource = ref
     ? activeMembers.map((member: any) => member.businesses).find((business: any) => business.slug === ref)
     : null;
 
@@ -53,6 +53,10 @@ export default async function HivePage({ params, searchParams }: PageProps) {
     const {data}=await db.rpc('public_hive_campaign_context',{p_hive_id:hive.id,p_tracking_token:pid});
     campaign=Array.isArray(data)?data[0]:data;
   }
+  const trustedSource=campaign?.source_business_id?activeMembers.map((member:any)=>member.businesses).find((business:any)=>business.id===campaign.source_business_id):null;
+  // A tracked campaign delivery is authoritative. `ref` remains a convenience
+  // for organic/untracked Hive links only and cannot override campaign attribution.
+  const source=pid?trustedSource:refSource;
   const visibleMembers = activeMembers;
   const spotlightBusiness=campaign?.spotlight_business_id?activeMembers.map((member:any)=>member.businesses).find((business:any)=>business.id===campaign.spotlight_business_id):null;
   const spotlightOffer=spotlightBusiness?.offers?.find((offer:any)=>offer.id===campaign?.spotlight_offer_id)||null;
