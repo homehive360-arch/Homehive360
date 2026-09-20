@@ -18,14 +18,20 @@ begin
  into v_next,v_name,v_last
  from public.next_hive_spotlight_member(p_hive_id) n limit 1;
 
+ -- Planner is pre-campaign, so use the platform default launch posture:
+ -- email enabled, SMS disabled. Deduplicate each customer to one source owner.
+ with eligible as(
+  select distinct on(l.customer_id) l.customer_id,l.source_business_id
+  from public.leads l
+  join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  where l.hive_id=p_hive_id and l.customer_id is not null and l.marketing_email_allowed
+  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+ )
  select
-  coalesce(count(distinct l.customer_id) filter(where hm.business_id=v_next and (l.marketing_email_allowed or l.marketing_sms_allowed)),0),
-  coalesce(count(distinct l.customer_id) filter(where hm.business_id<>v_next and (l.marketing_email_allowed or l.marketing_sms_allowed)),0),
-  coalesce(count(distinct l.customer_id) filter(where l.marketing_email_allowed or l.marketing_sms_allowed),0)
- into v_owned,v_incremental,v_total
- from public.hive_members hm
- left join public.leads l on l.hive_id=hm.hive_id and l.source_business_id=hm.business_id
- where hm.hive_id=p_hive_id and hm.status='active';
+  count(*) filter(where source_business_id=v_next),
+  count(*) filter(where source_business_id<>v_next),
+  count(*)
+ into v_owned,v_incremental,v_total from eligible;
 
  select coalesce(jsonb_agg(jsonb_build_object('id',o.id,'title',o.title,'description',o.description,'cta_label',o.cta_label,'ends_at',o.ends_at) order by o.created_at desc),'[]'::jsonb)
  into v_offers
