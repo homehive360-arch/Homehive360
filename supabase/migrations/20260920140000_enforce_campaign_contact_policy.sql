@@ -6,9 +6,10 @@ language plpgsql security definer set search_path=''
 as $function$
 declare v_campaign public.hive_campaigns;v_lead public.leads;v_delivery public.promotion_deliveries;v_elig jsonb;
 begin
+ if auth.role()<>'service_role' then raise exception 'Service role required'; end if;
  select * into v_campaign from public.hive_campaigns where id=p_campaign_id;
  if v_campaign.id is null then raise exception 'Campaign not found'; end if;
- if v_campaign.status not in('scheduled','active') then raise exception 'Campaign is not ready for delivery'; end if;
+ if v_campaign.status<>'active' then raise exception 'Campaign is not active'; end if;
  select * into v_lead from public.leads where id=p_lead_id;
  if v_lead.id is null then raise exception 'Audience record not found'; end if;
  if v_lead.hive_id<>v_campaign.hive_id then raise exception 'Audience record does not belong to campaign Hive'; end if;
@@ -41,3 +42,6 @@ begin
  return v_delivery;
 end
 $function$;
+
+revoke all on function public.queue_hive_campaign_delivery(uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.queue_hive_campaign_delivery(uuid,uuid,text) to service_role;
