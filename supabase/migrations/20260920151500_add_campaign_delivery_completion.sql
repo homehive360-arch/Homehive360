@@ -10,7 +10,7 @@ as $function$
    count(*) filter(where status='sending')::bigint sending,
    count(*) filter(where status='sent')::bigint sent,
    count(*) filter(where status='delivered')::bigint delivered,
-   count(*) filter(where status in('failed','bounced'))::bigint failed
+   count(*) filter(where status='failed')::bigint failed
   from public.promotion_deliveries where campaign_id=p_campaign_id
  ),r as(select status queue_status,audience_processed,deliveries_queued,deliveries_skipped,deliveries_failed from public.hive_campaign_runs where campaign_id=p_campaign_id)
  select jsonb_build_object(
