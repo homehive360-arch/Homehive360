@@ -293,9 +293,9 @@ begin
  if p_channel='sms' and (not v_recipient.sms_eligible or not v_lead.marketing_sms_allowed)
  then return jsonb_build_object('eligible',false,'reason','sms_not_enabled_or_consented'); end if;
  select max(pd.created_at) into v_last from public.promotion_deliveries pd join public.leads l on l.id=pd.lead_id
- where l.customer_id=v_recipient.customer_id and pd.campaign_id is not null and pd.status in('queued','sending','sent','delivered');
+ where l.customer_id=v_recipient.customer_id and pd.campaign_id is not null and pd.channel=p_channel and pd.status in('queued','sending','sent','delivered');
  if v_last is not null and v_last>now()-(v_campaign.min_contact_gap_days||' days')::interval
- then return jsonb_build_object('eligible',false,'reason','campaign_contact_cooldown','last_contact_at',v_last); end if;
+ then return jsonb_build_object('eligible',false,'reason','campaign_contact_cooldown','channel',p_channel,'last_contact_at',v_last); end if;
  return jsonb_build_object('eligible',true,'reason','eligible');
 end $function$;
 
