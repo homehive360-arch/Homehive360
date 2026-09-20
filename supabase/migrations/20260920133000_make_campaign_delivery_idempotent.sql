@@ -1,5 +1,13 @@
 -- Enforce one delivery per campaign/audience-record/channel and make campaign
 -- queueing safe to retry.
+-- The legacy delivery engine enforces UNIQUE(lead_id, channel), which only
+-- permits one promotion ever for a customer record/channel. Monthly campaigns
+-- need one delivery per campaign while preserving uniqueness for legacy
+-- non-campaign deliveries.
+drop index if exists public.promotion_deliveries_lead_channel_unique;
+create unique index if not exists promotion_deliveries_legacy_lead_channel_uidx
+ on public.promotion_deliveries(lead_id,channel) where campaign_id is null;
+
 create unique index if not exists promotion_deliveries_campaign_lead_channel_uidx
  on public.promotion_deliveries(campaign_id,lead_id,channel)
  where campaign_id is not null;
