@@ -7,5 +7,5 @@ language sql security definer set search_path='' stable as $function$
  where d.hive_id=p_hive_id and d.tracking_token=p_tracking_token and c.status in('active','completed')
  limit 1
 $function$;
-revoke all on function public.public_hive_campaign_context(uuid,uuid) from public,authenticated;
-grant execute on function public.public_hive_campaign_context(uuid,uuid) to anon;
+revoke all on function public.public_hive_campaign_context(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.public_hive_campaign_context(uuid,uuid) to anon,authenticated;
