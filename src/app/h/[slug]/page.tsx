@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation';
 import { createPublicClient } from '@/lib/supabase/public';
 import TrackedLink from '@/components/TrackedLink';
+import HiveVisitTracker from '@/components/HiveVisitTracker';
 
 type PageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ ref?: string }>;
+  searchParams: Promise<{ ref?: string; pid?: string }>;
 };
 
 function outboundUrl(url: string, hiveSlug: string, businessSlug: string, sourceSlug?: string) {
@@ -23,7 +24,7 @@ function outboundUrl(url: string, hiveSlug: string, businessSlug: string, source
 
 export default async function HivePage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const { ref } = await searchParams;
+  const { ref, pid } = await searchParams;
   const db = createPublicClient();
 
   const { data: hive } = await db
@@ -49,6 +50,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
   return (
     <main style={{ maxWidth: 1180, margin: '0 auto', padding: '52px 22px' }}>
+      <HiveVisitTracker hiveSlug={slug} pid={pid} />
       <div className="eyebrow">HOME HIVE 360 · {hive.market_name}</div>
       <h1 className="title" style={{ fontSize: 46, maxWidth: 850 }}>
         {source ? `${source.name}'s Trusted Home Service Network` : hive.headline || hive.name}
@@ -96,8 +98,8 @@ export default async function HivePage({ params, searchParams }: PageProps) {
               ) : null}
 
               <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-                {trackedPrimary ? <TrackedLink className="btn" href={trackedPrimary} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} offerId={offer?.id} eventType={offer ? "offer.clicked" : "member.clicked"}>{offer?.cta_label || "Request Service"}</TrackedLink> : null}
-                {trackedWebsite && trackedWebsite !== trackedPrimary ? <TrackedLink className="btn secondary" href={trackedWebsite} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug}>Visit Website</TrackedLink> : null}
+                {trackedPrimary ? <TrackedLink className="btn" href={trackedPrimary} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} pid={pid} offerId={offer?.id} eventType={offer ? "offer.clicked" : "member.clicked"}>{offer?.cta_label || "Request Service"}</TrackedLink> : null}
+                {trackedWebsite && trackedWebsite !== trackedPrimary ? <TrackedLink className="btn secondary" href={trackedWebsite} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} pid={pid}>Visit Website</TrackedLink> : null}
                 {business.phone ? <a className="btn secondary" href={`tel:${business.phone.replace(/[^+\d]/g, '')}`}>Call</a> : null}
               </div>
             </article>
