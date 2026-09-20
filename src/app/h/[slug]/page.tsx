@@ -38,7 +38,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
   const { data: members } = await db
     .from('hive_members')
-    .select('display_order,businesses(id,name,slug,phone,website_url,logo_url,description,google_rating,google_review_count,services(name,category,description),offers(id,title,description,cta_label,cta_url,status))')
+    .select('display_order,businesses(id,name,slug,phone,website_url,logo_url,description,google_rating,google_review_count,services(name,category,description,is_active),offers(id,title,description,cta_label,cta_url,status,starts_at,ends_at))')
     .eq('hive_id', hive.id)
     .eq('status', 'active')
     .order('display_order');
