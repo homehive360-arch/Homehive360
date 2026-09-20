@@ -35,7 +35,7 @@ begin
  select * into v from public.hive_campaigns where id=p_campaign_id;
  if v.id is null then raise exception 'Campaign not found'; end if;
  if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
-  where hm.hive_id=v.hive_id and bu.user_id=(select auth.uid()) and bu.role in('owner','admin'))
+  where hm.hive_id=v.hive_id and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin'))
  then raise exception 'Not authorized to manage this Hive'; end if;
  v_state:=public.hive_campaign_delivery_status(p_campaign_id);
  if coalesce((v_state->>'dispatch_complete')::boolean,false)=false
