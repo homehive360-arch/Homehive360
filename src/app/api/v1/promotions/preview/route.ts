@@ -16,5 +16,5 @@ export async function POST(request:NextRequest){
  const membershipResult=await db.from('hive_members').select('business_id').eq('hive_id',lead.hive_id).eq('business_id',lead.source_business_id).eq('status','active').maybeSingle();if(membershipResult.error)return NextResponse.json({error:'Hive membership lookup failed'},{status:500});if(!membershipResult.data)return NextResponse.json({error:'Promotion source is not an active Hive member'},{status:409});
  let message;try{message=buildPromotionMessage({firstName:customer.first_name||'there',sourceBusinessName:source.name,hiveSlug:hive.slug,sourceBusinessSlug:source.slug,marketName:hive.market_name,appOrigin:process.env.NEXT_PUBLIC_APP_URL});}catch{return NextResponse.json({error:'Promotion link configuration unavailable'},{status:503});}
  const channels=[] as string[];if(lead.marketing_email_allowed&&customer.email)channels.push('email');if(lead.marketing_sms_allowed&&customer.phone)channels.push('sms');
- return NextResponse.json({lead_id:lead.id,channels,message});
+ return NextResponse.json({lead_id:lead.id,audience_eligible:channels.length>0,channels,message,model:'monthly_hive_campaign'});
 }
