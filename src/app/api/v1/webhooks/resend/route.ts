@@ -1,13 +1,14 @@
 import {createClient} from '@supabase/supabase-js';
 import {NextRequest,NextResponse} from 'next/server';
+import {Webhook} from 'svix';
 import {mapResendEvent} from '@/lib/promotion/providers';
 
 export async function POST(request:NextRequest){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL,secret=process.env.SUPABASE_SECRET_KEY,webhookSecret=process.env.RESEND_WEBHOOK_SECRET;
  if(!url||!secret||!webhookSecret)return NextResponse.json({error:'Not configured'},{status:503});
- const supplied=request.headers.get('x-hh360-webhook-secret');
- if(!supplied||supplied!==webhookSecret)return NextResponse.json({error:'Unauthorized'},{status:401});
- let body:any;try{body=await request.json();}catch{return NextResponse.json({error:'Invalid JSON'},{status:400});}
+ const raw=await request.text();let body:any;
+ try{body=new Webhook(webhookSecret).verify(raw,{'svix-id':request.headers.get('svix-id')||'','svix-timestamp':request.headers.get('svix-timestamp')||'','svix-signature':request.headers.get('svix-signature')||''});}
+ catch{return NextResponse.json({error:'Invalid webhook signature'},{status:401});}
  const event=mapResendEvent(body);if(!event)return NextResponse.json({ok:true,ignored:true});
  const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
  const delivery=(await db.from('promotion_deliveries').select('id,status').eq('provider_message_id',event.providerMessageId).maybeSingle()).data;
