@@ -281,8 +281,11 @@ begin
  select * into v_delivery from public.promotion_deliveries
  where campaign_id=p_campaign_id and lead_id=p_lead_id and channel=p_channel order by created_at desc limit 1;
  if v_delivery.id is not null then return v_delivery; end if;
+ -- Campaign delivery represents exposure to the whole Hive, not a delivery to
+ -- the Spotlight member. The actual receiving business is established by the
+ -- customer's tracked member/offer click and stored on that event/opportunity.
  insert into public.promotion_deliveries(lead_id,source_business_id,target_business_id,channel,status,campaign_id)
- values(p_lead_id,v_recipient.source_business_id,v_campaign.spotlight_business_id,p_channel,'queued',p_campaign_id)
+ values(p_lead_id,v_recipient.source_business_id,null,p_channel,'queued',p_campaign_id)
  returning * into v_delivery;
  return v_delivery;
 exception when unique_violation then
