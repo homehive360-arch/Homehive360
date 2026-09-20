@@ -16,14 +16,14 @@ export async function sendSms(input:SmsInput):Promise<SendResult>{
 }
 
 export function mapResendEvent(payload:any):ProviderEvent|null{
- const id=payload?.data?.email_id||payload?.data?.id,type=String(payload?.type||'');
- if(!id)return null;
- if(type==='email.delivered')return{providerMessageId:String(id),status:'delivered'};
- if(['email.bounced','email.failed'].includes(type))return{providerMessageId:String(id),status:'failed'};
+ const rawId=payload?.data?.email_id||payload?.data?.id,type=String(payload?.type||'');
+ const id=typeof rawId==='string'?rawId.trim():'';if(!id)return null;
+ if(type==='email.delivered')return{providerMessageId:id,status:'delivered'};
+ if(['email.bounced','email.failed'].includes(type))return{providerMessageId:id,status:'failed'};
  return null;
 }
 export function mapTwilioStatus(payload:Record<string,string>):ProviderEvent|null{
- const id=payload.MessageSid,status=String(payload.MessageStatus||'').toLowerCase();if(!id)return null;
+ const id=typeof payload.MessageSid==='string'?payload.MessageSid.trim():'';const status=String(payload.MessageStatus||'').trim().toLowerCase();if(!id)return null;
  if(status==='delivered')return{providerMessageId:id,status:'delivered'};
  if(['failed','undelivered'].includes(status))return{providerMessageId:id,status:'failed'};
  return null;
