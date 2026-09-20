@@ -233,3 +233,40 @@ end $function$;
 
 revoke all on function public.assert_hive_campaign_dispatch_ready(uuid) from public,anon,authenticated;
 grant execute on function public.assert_hive_campaign_dispatch_ready(uuid) to service_role;
+
+
+-- Final campaign queue guard: deliveries must come from the immutable snapshot,
+-- not merely from a currently-valid lead record.
+create or replace function public.queue_hive_campaign_delivery(
+ p_campaign_id uuid,p_lead_id uuid,p_channel text
+) returns public.promotion_deliveries
+language plpgsql security definer set search_path='' as $function$
+declare v_campaign public.hive_campaigns;v_recipient public.hive_campaign_recipients;v_delivery public.promotion_deliveries;v_eligible jsonb;
+begin
+ perform public.assert_hive_campaign_dispatch_ready(p_campaign_id);
+ select * into v_campaign from public.hive_campaigns where id=p_campaign_id;
+ if p_channel not in('email','sms') then raise exception 'Unsupported channel'; end if;
+ select * into v_recipient from public.hive_campaign_recipients
+ where campaign_id=p_campaign_id and lead_id=p_lead_id;
+ if v_recipient.id is null then raise exception 'Audience record is not part of the frozen campaign audience'; end if;
+ if p_channel='email' and not v_recipient.email_eligible then raise exception 'Frozen audience record is not email eligible'; end if;
+ if p_channel='sms' and not v_recipient.sms_eligible then raise exception 'Frozen audience record is not SMS eligible'; end if;
+ v_eligible:=public.campaign_delivery_eligibility(p_campaign_id,p_lead_id,p_channel);
+ if coalesce((v_eligible->>'eligible')::boolean,false)=false then
+  raise exception 'Campaign delivery is not eligible: %',coalesce(v_eligible->>'reason','unknown');
+ end if;
+ select * into v_delivery from public.promotion_deliveries
+ where campaign_id=p_campaign_id and lead_id=p_lead_id and channel=p_channel order by created_at desc limit 1;
+ if v_delivery.id is not null then return v_delivery; end if;
+ insert into public.promotion_deliveries(lead_id,source_business_id,target_business_id,channel,status,campaign_id)
+ values(p_lead_id,v_recipient.source_business_id,v_campaign.spotlight_business_id,p_channel,'queued',p_campaign_id)
+ returning * into v_delivery;
+ return v_delivery;
+exception when unique_violation then
+ select * into v_delivery from public.promotion_deliveries
+ where campaign_id=p_campaign_id and lead_id=p_lead_id and channel=p_channel order by created_at desc limit 1;
+ return v_delivery;
+end $function$;
+
+revoke all on function public.queue_hive_campaign_delivery(uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.queue_hive_campaign_delivery(uuid,uuid,text) to service_role;
