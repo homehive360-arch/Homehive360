@@ -4,7 +4,9 @@ returns table(campaign_id uuid,campaign_name text,spotlight_business_id uuid,spo
 language sql security definer set search_path='' stable as $function$
  select c.id,c.name,c.spotlight_business_id,c.spotlight_offer_id,d.source_business_id
  from public.promotion_deliveries d join public.hive_campaigns c on c.id=d.campaign_id and c.hive_id=d.hive_id
- where d.hive_id=p_hive_id and d.tracking_token=p_tracking_token and c.status in('active','completed')
+ where d.hive_id=p_hive_id and d.tracking_token=p_tracking_token
+ and d.status in('sent','delivered')
+ and c.status in('active','completed')
  limit 1
 $function$;
 revoke all on function public.public_hive_campaign_context(uuid,uuid) from public,anon,authenticated;
