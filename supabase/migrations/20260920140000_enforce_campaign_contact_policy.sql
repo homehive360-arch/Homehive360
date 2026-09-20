@@ -4,7 +4,7 @@ create or replace function public.queue_hive_campaign_delivery(
 ) returns public.promotion_deliveries
 language plpgsql security definer set search_path=''
 as $function$
-declare v_campaign public.hive_campaigns;v_lead public.leads;v_delivery public.promotion_deliveries;v_elig jsonb;v_queued jsonb;
+declare v_campaign public.hive_campaigns;v_lead public.leads;v_delivery public.promotion_deliveries;v_elig jsonb;
 begin
  select * into v_campaign from public.hive_campaigns where id=p_campaign_id;
  if v_campaign.id is null then raise exception 'Campaign not found'; end if;
@@ -22,12 +22,12 @@ begin
  if coalesce((v_elig->>'eligible')::boolean,false)=false
  then raise exception 'Campaign delivery ineligible: %',coalesce(v_elig->>'reason','unknown'); end if;
 
- v_queued:=public.queue_promotion_delivery_atomic(p_lead_id,p_channel);
- select * into v_delivery from public.promotion_deliveries where id=(v_queued->>'id')::uuid;
- if v_delivery.id is null then raise exception 'Promotion delivery was not created'; end if;
- if v_delivery.campaign_id is not null and v_delivery.campaign_id<>p_campaign_id then raise exception 'Delivery is already assigned to another campaign'; end if;
  begin
-  update public.promotion_deliveries set campaign_id=p_campaign_id where id=v_delivery.id returning * into v_delivery;
+  insert into public.promotion_deliveries(lead_id,hive_id,source_business_id,customer_id,channel,status,campaign_id)
+  values(v_lead.id,v_lead.hive_id,v_lead.source_business_id,v_lead.customer_id,p_channel,'queued',p_campaign_id)
+  returning * into v_delivery;
+  insert into public.events(hive_id,business_id,customer_id,lead_id,event_type,actor_type,properties)
+  values(v_lead.hive_id,v_lead.source_business_id,v_lead.customer_id,v_lead.id,'promotion.queued','system',jsonb_build_object('channel',v_delivery.channel,'delivery_id',v_delivery.id,'campaign_id',p_campaign_id));
  exception when unique_violation then
   select * into v_delivery from public.promotion_deliveries
   where campaign_id=p_campaign_id and lead_id=p_lead_id and channel=p_channel order by created_at desc limit 1;
