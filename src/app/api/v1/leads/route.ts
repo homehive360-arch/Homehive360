@@ -2,7 +2,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {createClient} from '@supabase/supabase-js';
 import {createHash} from 'crypto';
 import {rankPromotionCandidates} from '@/lib/promotion/rank';
-type LeadPayload={first_name?:string;last_name?:string;email?:string;phone?:string;zip?:string;service?:string;source?:string;external_lead_id?:string;marketing_email_allowed?:boolean;marketing_sms_allowed?:boolean;metadata?:Record<string,unknown>};
+type LeadPayload={first_name?:string;last_name?:string;email?:string;phone?:string;zip?:string;service?:string;source?:string;external_lead_id?:string;marketing_email_allowed?:boolean;marketing_sms_allowed?:boolean;metadata?:Record<string,unknown>;hive_id?:string;hive_slug?:string};
 const emailOf=(v?:string)=>v?.trim().toLowerCase()||null;
 const phoneOf=(v?:string)=>{const d=v?.replace(/\D/g,'')||'';return d.length>=10?d:null;};
 export async function POST(request:NextRequest){
@@ -13,7 +13,7 @@ export async function POST(request:NextRequest){
  const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});const keyHash=createHash('sha256').update(apiKey).digest('hex');
  const key=(await admin.from('business_api_keys').select('id,business_id').eq('key_hash',keyHash).eq('is_active',true).maybeSingle()).data;if(!key)return NextResponse.json({error:'Invalid API key.'},{status:401});
  await admin.from('business_api_keys').update({last_used_at:new Date().toISOString()}).eq('id',key.id);
- const membership=(await admin.from('hive_members').select('hive_id').eq('business_id',key.business_id).eq('status','active').limit(1).maybeSingle()).data;if(!membership)return NextResponse.json({error:'Business is not an active Hive member.'},{status:403});
+ const memberships=(await admin.from('hive_members').select('hive_id,hives(slug)').eq('business_id',key.business_id).eq('status','active')).data||[];if(!memberships.length)return NextResponse.json({error:'Business is not an active Hive member.'},{status:403});let membership:any=null;if(body.hive_id)membership=memberships.find((m:any)=>m.hive_id===body.hive_id);else if(body.hive_slug)membership=memberships.find((m:any)=>m.hives?.slug===body.hive_slug);else if(memberships.length===1)membership=memberships[0];else return NextResponse.json({error:'Multiple active Hives found. Supply hive_id or hive_slug.'},{status:422});if(!membership)return NextResponse.json({error:'Business is not an active member of the requested Hive.'},{status:403});
  if(body.external_lead_id){const existing=(await admin.from('leads').select('id,received_at').eq('source_business_id',key.business_id).eq('external_lead_id',body.external_lead_id).maybeSingle()).data;if(existing)return NextResponse.json({lead_id:existing.id,received_at:existing.received_at,duplicate:true},{status:200});}
  let customerId:string|null=null;
  if(email)customerId=(await admin.from('customers').select('id').eq('source_business_id',key.business_id).eq('email',email).limit(1).maybeSingle()).data?.id||null;
