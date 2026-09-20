@@ -133,7 +133,9 @@ begin
    bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
    bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
   from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
-  where l.hive_id=v_hive and l.customer_id is not null and (l.marketing_email_allowed or l.marketing_sms_allowed)
+  join public.hive_campaign_policy p on p.hive_id=l.hive_id
+  where l.hive_id=v_hive and l.customer_id is not null
+   and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
   order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
  ) x;
  get diagnostics v_count=row_count;
