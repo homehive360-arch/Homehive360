@@ -2,9 +2,9 @@
 import {FormEvent,useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
 import {createBrowserSupabase} from '@/lib/supabase/browser';
-const db=createBrowserSupabase();
 const slugify=(v:string)=>v.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export default function Onboarding(){
+ const db=useMemo(()=>createBrowserSupabase(),[]);
  const [userId,setUserId]=useState<string|null>(null);const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [msg,setMsg]=useState('');const [businesses,setBusinesses]=useState<any[]>([]);const [hives,setHives]=useState<any[]>([]);const [members,setMembers]=useState<any[]>([]);const [services,setServices]=useState<any[]>([]);const [offers,setOffers]=useState<any[]>([]);
  useEffect(()=>{db.auth.getUser().then(({data})=>{setUserId(data.user?.id||null);if(data.user)loadBusinesses()})},[]);
  async function loadBusinesses(){const [{data:bs},{data:hs},{data:ms},{data:ss},{data:os}]=await Promise.all([db.from('business_users').select('business_id,role,businesses(id,name,slug)').order('role'),db.from('hives').select('id,name,status'),db.from('hive_members').select('hive_id,business_id,status,businesses(id,services(category,is_active))'),db.from('services').select('id,business_id,is_active'),db.from('offers').select('id,business_id,status')]);setBusinesses(bs||[]);setHives(hs||[]);setMembers(ms||[]);setServices(ss||[]);setOffers(os||[])}
