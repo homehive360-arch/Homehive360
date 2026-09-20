@@ -14,9 +14,11 @@ create table if not exists public.hive_prospects (
  declined_at timestamptz,
  created_at timestamptz not null default now(),
  updated_at timestamptz not null default now(),
- unique(hive_id,business_id),
- unique(hive_id,category)
+ unique(hive_id,business_id)
 );
+create unique index if not exists hive_prospects_open_category_uq
+ on public.hive_prospects(hive_id,lower(trim(category)))
+ where roster_state in('prospective','invited','accepted');
 
 create index if not exists hive_prospects_hive_state_idx on public.hive_prospects(hive_id,roster_state,category);
 
