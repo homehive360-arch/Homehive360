@@ -36,12 +36,20 @@ begin
  ) then raise exception 'Not authorized to manage this Hive'; end if;
 
  insert into public.hive_campaign_audiences(campaign_id,source_business_id,eligible_customers,email_eligible,sms_eligible)
+ with eligible as(
+  select distinct on(l.customer_id) l.customer_id,l.source_business_id,
+   v_email and bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
+   v_sms and bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
+  from public.leads l
+  join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  where l.hive_id=v_hive and l.customer_id is not null
+   and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
+  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+ )
  select p_campaign_id,hm.business_id,
-  count(distinct l.customer_id) filter(where (v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed)),
-  count(distinct l.customer_id) filter(where v_email and l.marketing_email_allowed),
-  count(distinct l.customer_id) filter(where v_sms and l.marketing_sms_allowed)
+  count(e.customer_id),count(e.customer_id) filter(where e.email_eligible),count(e.customer_id) filter(where e.sms_eligible)
  from public.hive_members hm
- left join public.leads l on l.hive_id=hm.hive_id and l.source_business_id=hm.business_id
+ left join eligible e on e.source_business_id=hm.business_id
  where hm.hive_id=v_hive and hm.status='active'
  group by hm.business_id
  on conflict(campaign_id,source_business_id) do update set
