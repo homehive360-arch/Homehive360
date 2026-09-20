@@ -10,8 +10,9 @@ as $function$
   'audience_processed',coalesce(r.audience_processed,0),'queue_failures',coalesce(r.deliveries_failed,0),
   'pending_deliveries',d.pending,'provider_failures',d.provider_failures,
   'last_progress_at',coalesce(r.run_updated_at,c.updated_at),
+  'overdue_schedule',case when c.status='scheduled' and c.scheduled_at<now()-interval '10 minutes' then true else false end,
   'stalled',case when c.status='active' and coalesce(r.queue_status,'')<>'queue_complete' and coalesce(r.run_updated_at,c.updated_at)<now()-interval '30 minutes' then true else false end,
-  'needs_attention',case when coalesce(r.deliveries_failed,0)>0 or d.provider_failures>0 or (c.status='active' and coalesce(r.queue_status,'')<>'queue_complete' and coalesce(r.run_updated_at,c.updated_at)<now()-interval '30 minutes') then true else false end
+  'needs_attention',case when (c.status='scheduled' and c.scheduled_at<now()-interval '10 minutes') or coalesce(r.deliveries_failed,0)>0 or d.provider_failures>0 or (c.status='active' and coalesce(r.queue_status,'')<>'queue_complete' and coalesce(r.run_updated_at,c.updated_at)<now()-interval '30 minutes') then true else false end
  ) from c left join r on true cross join d
 $function$;
 revoke all on function public.hive_campaign_execution_health(uuid) from public,anon;
