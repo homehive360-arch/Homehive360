@@ -45,12 +45,15 @@ begin
  ) then raise exception 'Not authorized to manage this Hive'; end if;
  if not exists(select 1 from public.hive_members where hive_id=p_hive_id and business_id=p_spotlight_business_id and status='active')
  then raise exception 'Spotlight business must be an active Hive member'; end if;
+ if p_campaign_month is null then raise exception 'Campaign month is required'; end if;
+ if date_trunc('month',p_campaign_month)::date < date_trunc('month',current_date)::date then raise exception 'Campaign month cannot be in the past'; end if;
  if p_spotlight_offer_id is not null then
   select business_id,status,starts_at,ends_at into v_offer_business,v_offer_status,v_starts,v_ends
   from public.offers where id=p_spotlight_offer_id;
   if v_offer_business is distinct from p_spotlight_business_id or v_offer_status is distinct from 'active'
-   or (v_starts is not null and v_starts>now()) or (v_ends is not null and v_ends<now())
   then raise exception 'Spotlight offer must be an active offer for the spotlight member'; end if;
+  -- Offer date validity is intentionally checked against the actual launch time
+  -- by set_hive_campaign_status / scheduled activation, not against creation time.
  end if;
  insert into public.hive_campaigns(hive_id,campaign_month,name,spotlight_business_id,spotlight_offer_id)
  values(p_hive_id,date_trunc('month',p_campaign_month)::date,coalesce(nullif(trim(p_name),''),to_char(p_campaign_month,'FMMonth YYYY')||' Home Hive Spotlight'),p_spotlight_business_id,p_spotlight_offer_id)
