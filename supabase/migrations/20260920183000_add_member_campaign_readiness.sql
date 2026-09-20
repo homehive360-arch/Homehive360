@@ -21,7 +21,7 @@ as $function$
     and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
   ) ok
  ),policy as(
-  select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
+  select true email_enabled,false sms_enabled
  ),audience as(
   select l.source_business_id,
    count(distinct l.customer_id)::bigint audience_customers,
