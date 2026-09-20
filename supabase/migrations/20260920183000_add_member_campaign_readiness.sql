@@ -20,12 +20,15 @@ as $function$
    where hm.hive_id=p_hive_id and hm.status='active'
     and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
   ) ok
+ ),policy as(
+  select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
  ),audience as(
   select l.source_business_id,
    count(distinct l.customer_id)::bigint audience_customers,
-   count(distinct l.customer_id) filter(where l.marketing_email_allowed)::bigint email_eligible,
-   count(distinct l.customer_id) filter(where l.marketing_sms_allowed)::bigint sms_eligible
+   count(distinct l.customer_id) filter(where p.email_enabled and l.marketing_email_allowed)::bigint email_eligible,
+   count(distinct l.customer_id) filter(where p.sms_enabled and l.marketing_sms_allowed)::bigint sms_eligible
   from public.leads l
+  cross join policy p
   where l.hive_id=p_hive_id
   group by l.source_business_id
  )
