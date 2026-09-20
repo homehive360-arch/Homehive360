@@ -10,7 +10,7 @@ begin
  loop
   if not exists(select 1 from public.hive_members hm where hm.hive_id=c.hive_id and hm.business_id=c.spotlight_business_id and hm.status='active') then continue; end if;
   if c.spotlight_offer_id is not null and not exists(select 1 from public.offers o where o.id=c.spotlight_offer_id and o.business_id=c.spotlight_business_id and o.status='active' and (o.starts_at is null or o.starts_at<=now()) and (o.ends_at is null or o.ends_at>=now())) then continue; end if;
-  perform public.refresh_hive_campaign_audiences(c.id);perform public.snapshot_hive_campaign_recipients(c.id);
+  perform public.snapshot_hive_campaign_recipients(c.id);
   update public.hive_campaigns set status='active',updated_at=now() where id=c.id;
   campaign_id:=c.id;return next;
  end loop;
