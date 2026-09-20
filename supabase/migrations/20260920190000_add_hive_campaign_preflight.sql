@@ -39,3 +39,42 @@ $function$;
 
 revoke all on function public.hive_campaign_preflight(uuid) from public,anon;
 grant execute on function public.hive_campaign_preflight(uuid) to authenticated;
+
+
+-- Guard monthly campaign creation with the same minimum viable network rules
+-- operators see in preflight. This prevents UI/API bypasses.
+create or replace function public.create_launch_ready_monthly_hive_campaign(
+ p_hive_id uuid,
+ p_campaign_month date,
+ p_spotlight_offer_id uuid default null
+) returns public.hive_campaigns
+language plpgsql security definer set search_path=''
+as $function$
+declare v_ready jsonb;v_spotlight uuid;v_campaign public.hive_campaigns;
+begin
+ if not exists(
+  select 1 from public.hive_members hm
+  join public.business_users bu on bu.business_id=hm.business_id
+  where hm.hive_id=p_hive_id and hm.status='active'
+   and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
+ ) then raise exception 'Not authorized to create campaigns for this Hive'; end if;
+
+ v_ready:=public.hive_launch_readiness(p_hive_id);
+ if coalesce((v_ready->>'launch_ready')::boolean,false)=false then
+  raise exception 'Hive is not launch ready';
+ end if;
+
+ select public.next_hive_spotlight_member(p_hive_id) into v_spotlight;
+ if v_spotlight is null then raise exception 'No eligible Spotlight member'; end if;
+
+ -- Delegate month/offer ownership/status/date validation to the canonical
+ -- campaign creation function so there is one source of truth for creation.
+ select * into v_campaign from public.create_monthly_hive_campaign(
+  p_hive_id,p_campaign_month,v_spotlight,p_spotlight_offer_id
+ );
+ return v_campaign;
+end
+$function$;
+
+revoke all on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid) from public,anon;
+grant execute on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid) to authenticated;
