@@ -8,7 +8,8 @@ export async function POST(request:NextRequest){
  if(!url||!secret||!authToken)return NextResponse.json({error:'Not configured'},{status:503});
  const form=await request.formData();const payload:Record<string,string>={};form.forEach((v,k)=>{payload[k]=String(v)});
  const signature=request.headers.get('x-twilio-signature')||'';
- const configuredOrigin=(process.env.NEXT_PUBLIC_APP_URL||'').replace(/\/$/,'');const incomingUrl=new URL(request.url);const callbackUrl=configuredOrigin?configuredOrigin+incomingUrl.pathname+incomingUrl.search:request.url;
+ const configuredOrigin=(process.env.NEXT_PUBLIC_APP_URL||'').replace(/\/$/,'');if(!configuredOrigin)return NextResponse.json({error:'Webhook origin not configured'},{status:503});
+ let callbackUrl:string;try{const origin=new URL(configuredOrigin);if(!['http:','https:'].includes(origin.protocol)||origin.pathname!=='/'||origin.search||origin.hash)throw new Error('invalid origin');const incomingUrl=new URL(request.url);callbackUrl=origin.origin+incomingUrl.pathname+incomingUrl.search;}catch{return NextResponse.json({error:'Webhook origin configuration invalid'},{status:503});}
  if(!signature||!twilio.validateRequest(authToken,signature,callbackUrl,payload))return NextResponse.json({error:'Invalid webhook signature'},{status:401});
  const event=mapTwilioStatus(payload);if(!event)return NextResponse.json({ok:true,ignored:true});
  const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
