@@ -38,7 +38,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
   const { data: members } = await db
     .from('hive_members')
-    .select('display_order,businesses(id,name,slug,phone,website_url,description,google_rating,google_review_count,services(name,category,description),offers(id,title,description,cta_label,cta_url,status))')
+    .select('display_order,businesses(id,name,slug,phone,website_url,logo_url,description,google_rating,google_review_count,services(name,category,description),offers(id,title,description,cta_label,cta_url,status))')
     .eq('hive_id', hive.id)
     .eq('status', 'active')
     .order('display_order');
@@ -82,6 +82,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
           return (
             <article className="card" key={business.id}>
+              {business.logo_url ? <img src={business.logo_url} alt={business.name+' logo'} style={{maxWidth:150,maxHeight:58,objectFit:'contain',marginBottom:14}}/> : null}
               <div className="eyebrow">{service?.category || service?.name || 'Home Service'}</div>
               <h2>{business.name}</h2>
               {business.google_rating ? (
@@ -100,7 +101,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
               <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
                 {trackedPrimary ? <TrackedLink className="btn" href={trackedPrimary} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} pid={pid} offerId={offer?.id} eventType={offer ? "offer.clicked" : "member.clicked"}>{offer?.cta_label || "Request Service"}</TrackedLink> : null}
                 {trackedWebsite && trackedWebsite !== trackedPrimary ? <TrackedLink className="btn secondary" href={trackedWebsite} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} pid={pid}>Visit Website</TrackedLink> : null}
-                {business.phone ? <a className="btn secondary" href={`tel:${business.phone.replace(/[^+\d]/g, '')}`}>Call</a> : null}
+                {business.phone ? <TrackedLink className="btn secondary" href={`tel:${business.phone.replace(/[^+\d]/g, '')}`} hiveSlug={slug} businessSlug={business.slug} sourceSlug={source?.slug} pid={pid} eventType="member.clicked">Call</TrackedLink> : null}
               </div>
             </article>
           );
