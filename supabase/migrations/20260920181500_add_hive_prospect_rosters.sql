@@ -57,6 +57,9 @@ create or replace function public.guard_hive_category_seat()
 returns trigger language plpgsql security definer set search_path=''
 as $function$
 begin
+ if new.status='active' then
+  perform pg_advisory_xact_lock(hashtextextended('hh360:seat:'||new.hive_id::text||':'||lower(trim(new.category)),0));
+ end if;
  if new.status='active' and exists(
   select 1 from public.hive_prospects hp
   where hp.hive_id=new.hive_id
@@ -89,6 +92,7 @@ as $function$
 declare v public.hive_prospects;
 begin
  if nullif(trim(p_category),'') is null then raise exception 'Category is required'; end if;
+ perform pg_advisory_xact_lock(hashtextextended('hh360:seat:'||p_hive_id::text||':'||lower(trim(p_category)),0));
  if not exists(
   select 1 from public.hive_members hm
   join public.business_users bu on bu.business_id=hm.business_id
