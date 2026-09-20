@@ -17,7 +17,7 @@ alter table public.hive_campaign_runs enable row level security;
 create policy "members can view campaign runs" on public.hive_campaign_runs for select to authenticated using(exists(
  select 1 from public.hive_campaigns c join public.hive_members hm on hm.hive_id=c.hive_id
  join public.business_users bu on bu.business_id=hm.business_id
- where c.id=hive_campaign_runs.campaign_id and bu.user_id=(select auth.uid())
+ where c.id=hive_campaign_runs.campaign_id and hm.status='active' and bu.user_id=(select auth.uid())
 ));
 
 
