@@ -6,7 +6,7 @@ export async function POST(request:NextRequest){
  if(!url||!secret)return NextResponse.json({error:'Not configured'},{status:503});
  let body:{lead_id?:string};try{body=await request.json();}catch{return NextResponse.json({error:'Invalid JSON'},{status:400});}
  if(!body.lead_id)return NextResponse.json({error:'Missing lead_id'},{status:422});
- const auth=await authorizeBusinessKey(request,url,secret);if(!auth)return NextResponse.json({error:'Invalid API key'},{status:401});const db=auth.db;
+ const authResult=await authorizeBusinessKey(request,url,secret);if(!authResult.ok)return NextResponse.json({error:authResult.error},{status:authResult.status});const auth=authResult.auth,db=auth.db;
  const lead=(await db.from('leads').select('id,hive_id,source_business_id,customer_id,marketing_email_allowed,marketing_sms_allowed').eq('id',body.lead_id).maybeSingle()).data;
  if(!lead)return NextResponse.json({error:'Lead not found'},{status:404});if(lead.source_business_id!==auth.businessId)return NextResponse.json({error:'Forbidden'},{status:403});
  if(!lead.marketing_email_allowed&&!lead.marketing_sms_allowed)return NextResponse.json({error:'Promotion consent not available'},{status:403});
