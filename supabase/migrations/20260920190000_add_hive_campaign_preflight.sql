@@ -54,7 +54,8 @@ grant execute on function public.hive_campaign_preflight(uuid) to authenticated;
 create or replace function public.create_launch_ready_monthly_hive_campaign(
  p_hive_id uuid,
  p_campaign_month date,
- p_spotlight_offer_id uuid default null
+ p_spotlight_offer_id uuid default null,
+ p_expected_spotlight_business_id uuid default null
 ) returns public.hive_campaigns
 language plpgsql security definer set search_path=''
 as $function$
@@ -74,6 +75,9 @@ begin
 
  select n.business_id into v_spotlight from public.next_hive_spotlight_member(p_hive_id) n limit 1;
  if v_spotlight is null then raise exception 'No eligible Spotlight member'; end if;
+ if p_expected_spotlight_business_id is not null and v_spotlight<>p_expected_spotlight_business_id then
+  raise exception 'Spotlight changed since campaign planning; refresh before creating campaign';
+ end if;
 
  -- Delegate month/offer ownership/status/date validation to the canonical
  -- campaign creation function so there is one source of truth for creation.
@@ -84,8 +88,8 @@ begin
 end
 $function$;
 
-revoke all on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid) from public,anon;
-grant execute on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid) to authenticated;
+revoke all on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid,uuid) from public,anon;
+grant execute on function public.create_launch_ready_monthly_hive_campaign(uuid,date,uuid,uuid) to authenticated;
 
 
 -- External authenticated callers must use the launch-readiness gate. The lower-level
