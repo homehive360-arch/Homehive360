@@ -8,7 +8,8 @@ export async function POST(request:NextRequest){
  if(!url||!secret||!authToken)return NextResponse.json({error:'Not configured'},{status:503});
  const form=await request.formData();const payload:Record<string,string>={};form.forEach((v,k)=>{payload[k]=String(v)});
  const signature=request.headers.get('x-twilio-signature')||'';
- if(!signature||!twilio.validateRequest(authToken,signature,request.url,payload))return NextResponse.json({error:'Invalid webhook signature'},{status:401});
+ const configuredOrigin=(process.env.NEXT_PUBLIC_APP_URL||'').replace(/\/$/,'');const callbackUrl=configuredOrigin?configuredOrigin+new URL(request.url).pathname:request.url;
+ if(!signature||!twilio.validateRequest(authToken,signature,callbackUrl,payload))return NextResponse.json({error:'Invalid webhook signature'},{status:401});
  const event=mapTwilioStatus(payload);if(!event)return NextResponse.json({ok:true,ignored:true});
  const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
  const delivery=(await db.from('promotion_deliveries').select('id,status').eq('provider_message_id',event.providerMessageId).maybeSingle()).data;
