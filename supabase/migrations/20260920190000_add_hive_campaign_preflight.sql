@@ -265,6 +265,13 @@ begin
  select * into v_recipient from public.hive_campaign_recipients
  where campaign_id=p_campaign_id and lead_id=p_lead_id;
  if v_recipient.id is null then raise exception 'Audience record is not part of the frozen campaign audience'; end if;
+ -- The frozen lead is only an execution anchor. If CRM sync has reassigned that
+ -- lead to another customer/source/Hive, fail closed rather than send to drifted identity.
+ if not exists(
+  select 1 from public.leads l
+  where l.id=p_lead_id and l.hive_id=v_campaign.hive_id
+   and l.customer_id=v_recipient.customer_id and l.source_business_id=v_recipient.source_business_id
+ ) then raise exception 'Frozen audience identity no longer matches the live audience record'; end if;
  if p_channel='email' and not v_recipient.email_eligible then raise exception 'Frozen audience record is not email eligible'; end if;
  if p_channel='sms' and not v_recipient.sms_eligible then raise exception 'Frozen audience record is not SMS eligible'; end if;
  v_eligible:=public.campaign_delivery_eligibility(p_campaign_id,p_lead_id,p_channel);
