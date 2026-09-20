@@ -18,11 +18,15 @@ as $function$
  ),cfg as(
   select min_launch_members,min_launch_audience from public.hives where id=p_hive_id
  ),members as(
-  select count(*)::int active_members,
-   count(distinct hs.category)::int occupied_categories
+  select count(*)::int active_members
   from public.hive_members hm
-  join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active'
   where hm.hive_id=p_hive_id and hm.status='active'
+ ),seats as(
+  select count(distinct hs.category)::int occupied_categories,
+   count(distinct hs.business_id)::int members_with_seats
+  from public.hive_member_seats hs
+  join public.hive_members hm on hm.hive_id=hs.hive_id and hm.business_id=hs.business_id and hm.status='active'
+  where hs.hive_id=p_hive_id and hs.status='active'
  ),policy as(
   select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
  ),aud as(
@@ -35,17 +39,21 @@ as $function$
  )
  select case when (select ok from authorized) then jsonb_build_object(
   'active_members',m.active_members,
-  'occupied_categories',m.occupied_categories,
+  'occupied_categories',s.occupied_categories,
+  'members_with_seats',s.members_with_seats,
+  'missing_seats',greatest(m.active_members-s.members_with_seats,0),
   'eligible_audience',a.eligible_audience,
   'min_launch_members',cfg.min_launch_members,
   'min_launch_audience',cfg.min_launch_audience,
   'member_gate_met',m.active_members>=cfg.min_launch_members,
+  'seat_gate_met',s.members_with_seats=m.active_members and s.occupied_categories=m.active_members,
   'audience_gate_met',a.eligible_audience>=cfg.min_launch_audience,
   'launch_ready',m.active_members>=cfg.min_launch_members
-    and m.occupied_categories>=cfg.min_launch_members
+    and s.members_with_seats=m.active_members
+    and s.occupied_categories=m.active_members
     and a.eligible_audience>=cfg.min_launch_audience
  ) else null end
- from cfg cross join members m cross join aud a
+ from cfg cross join members m cross join seats s cross join aud a
 $function$;
 
 revoke all on function public.hive_launch_readiness(uuid) from public,anon;
