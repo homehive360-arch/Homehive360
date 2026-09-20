@@ -16,6 +16,6 @@ export async function POST(request:NextRequest){
  if(!delivery)return NextResponse.json({ok:true,ignored:true});
  if(delivery.status===event.status)return NextResponse.json({ok:true,idempotent:true});
  const r=await db.rpc('update_promotion_delivery_atomic',{p_id:delivery.id,p_expected_status:delivery.status,p_status:event.status,p_provider_message_id:event.providerMessageId});
- if(r.error)return NextResponse.json({error:'Delivery update failed'},{status:409});
+ if(r.error){const concurrent=r.error.message?.includes('delivery_changed')||r.error.message?.includes('invalid_delivery_transition');if(concurrent)return NextResponse.json({ok:true,ignored:true,reason:'stale_webhook'});return NextResponse.json({error:'Delivery update failed'},{status:500});}
  return NextResponse.json({ok:true});
 }
