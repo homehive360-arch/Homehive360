@@ -51,3 +51,59 @@ The first campaign should exercise the full canonical flow:
 Create Campaign -> Spotlight Selection -> Schedule -> Activate -> Freeze Audience -> Queue -> Deliver -> Hive Visit -> Offer Intent -> Opportunity -> Won Job -> Attributed Revenue
 
 All campaign metrics for this reference campaign must render as DEMO DATA.
+
+
+## Directory-to-Hive construction contract
+
+The Brunswick reference Hive is the first fixture for a future operator workflow that converts Directory prospects into a Hive without treating prospects as members.
+
+### Seat model
+
+Each prospective roster entry should carry:
+- directory company identity
+- market
+- primary category seat
+- roster_state = prospective
+- membership_state = not_invited | invited | accepted | declined
+- audience_state = not_connected | connected
+- campaign_state = not_ready | ready
+
+A category seat is considered filled for planning when a prospective company is selected, but it is not an active Hive member until membership_state=accepted and the corresponding live membership is active.
+
+### Readiness gates
+
+Campaign readiness requires all of the following:
+1. Membership accepted and active.
+2. Source-owned customer audience connected.
+3. At least one permitted campaign channel.
+4. Required business/profile data present.
+5. No category-seat conflict.
+
+Prospective and invited companies must never contribute audience reach or appear in live campaign distribution metrics.
+
+### Brunswick build-board
+
+| Category | Candidate | Seat | Membership | Audience | Campaign |
+| --- | --- | --- | --- | --- | --- |
+| Roofing | Platinum Roofing | Selected | Not invited | Not connected | Not ready |
+| Electrical | Certified Electric, Inc | Selected | Not invited | Not connected | Not ready |
+| General Contractor | G Core Construction | Selected | Not invited | Not connected | Not ready |
+| Landscaping | Ground Effects Landscaping | Selected | Not invited | Not connected | Not ready |
+| Pool Service | Jeff's Pool and Spa Service | Selected | Not invited | Not connected | Not ready |
+| HVAC | — | Open | — | — | — |
+| Plumbing | — | Open | — | — | — |
+| Pest Control | — | Open | — | — | — |
+| House Cleaning | — | Open | — | — | — |
+| Painting | — | Open | — | — | — |
+| Handyman | — | Open | — | — | — |
+| Pressure Washing | — | Open | — | — | — |
+| Windows & Doors | — | Open | — | — | — |
+| Garage Doors | — | Open | — | — | — |
+| Flooring | — | Open | — | — | — |
+| Restoration | — | Open | — | — | — |
+
+### Operator UX target
+
+Directory -> Filter market -> Select one candidate per category -> Build Hive -> Review open seats -> Send invitations -> Track acceptance -> Connect audiences -> Campaign Ready
+
+The UI must visually distinguish Directory prospects, invited businesses, accepted members, and campaign-ready members. Selecting a Directory business is not consent to membership.
