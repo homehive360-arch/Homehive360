@@ -1,3 +1,17 @@
+-- Tighten Spotlight rotation after authoritative member seats exist.
+create or replace function public.next_hive_spotlight_member(p_hive_id uuid)
+returns table(business_id uuid,business_name text,last_spotlight_month date)
+language sql security invoker set search_path='' stable as $function$
+ select b.id,b.name,max(c.campaign_month)
+ from public.hive_members hm join public.businesses b on b.id=hm.business_id
+ join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active'
+ left join public.hive_campaigns c on c.hive_id=hm.hive_id and c.spotlight_business_id=hm.business_id and c.status<>'cancelled'
+ where hm.hive_id=p_hive_id and hm.status='active'
+ group by b.id,b.name order by max(c.campaign_month) asc nulls first,b.name limit 1
+$function$;
+revoke all on function public.next_hive_spotlight_member(uuid) from public,anon;
+grant execute on function public.next_hive_spotlight_member(uuid) to authenticated;
+
 -- Preflight a Hive's first/next monthly campaign. This keeps launch readiness,
 -- Spotlight rotation and incremental network reach in one operator-facing view.
 create or replace function public.hive_campaign_preflight(p_hive_id uuid)
