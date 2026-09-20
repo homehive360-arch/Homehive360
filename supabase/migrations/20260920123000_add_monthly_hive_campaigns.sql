@@ -23,7 +23,7 @@ for select to authenticated
 using(exists(
  select 1 from public.hive_members hm
  join public.business_users bu on bu.business_id=hm.business_id
- where hm.hive_id=hive_campaigns.hive_id and bu.user_id=(select auth.uid())
+ where hm.hive_id=hive_campaigns.hive_id and hm.status='active' and bu.user_id=(select auth.uid())
 ));
 
 create or replace function public.create_monthly_hive_campaign(
@@ -41,7 +41,7 @@ declare v_id uuid; v_offer_business uuid; v_offer_status text; v_starts timestam
 begin
  if not exists(
   select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
-  where hm.hive_id=p_hive_id and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
+  where hm.hive_id=p_hive_id and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
  ) then raise exception 'Not authorized to manage this Hive'; end if;
  if not exists(select 1 from public.hive_members where hive_id=p_hive_id and business_id=p_spotlight_business_id and status='active')
  then raise exception 'Spotlight business must be an active Hive member'; end if;
