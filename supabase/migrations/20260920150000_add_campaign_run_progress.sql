@@ -41,7 +41,10 @@ returns bigint language plpgsql security definer set search_path='' as $function
 declare v_hive uuid;v_count bigint;
 begin
  select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;if v_hive is null then raise exception 'Campaign not found';end if;
- delete from public.hive_campaign_recipients where campaign_id=p_campaign_id;
+ select count(*) into v_count from public.hive_campaign_recipients where campaign_id=p_campaign_id;
+ -- A recipient snapshot is immutable once created. Repeated activation/worker
+ -- calls are idempotent and must never silently rebuild a frozen audience.
+ if v_count>0 then return v_count; end if;
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible)
  select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible from (
   select distinct on(l.customer_id) l.id lead_id,l.source_business_id,l.customer_id,
