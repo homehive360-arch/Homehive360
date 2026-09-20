@@ -50,15 +50,12 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
   let campaign:any=null;
   if(pid){
-    const {data:delivery}=await db.from('promotion_deliveries').select('campaign_id').eq('tracking_token',pid).maybeSingle();
-    if(delivery?.campaign_id){
-      const {data}=await db.from('hive_campaigns').select('id,name,spotlight_business_id,spotlight_offer_id,businesses!hive_campaigns_spotlight_business_id_fkey(id,name,slug,logo_url,description,website_url,phone),offers!hive_campaigns_spotlight_offer_id_fkey(id,title,description,cta_label,cta_url)').eq('id',delivery.campaign_id).eq('hive_id',hive.id).maybeSingle();
-      campaign=data;
-    }
+    const {data}=await db.rpc('public_hive_campaign_context',{p_hive_id:hive.id,p_tracking_token:pid});
+    campaign=Array.isArray(data)?data[0]:data;
   }
   const visibleMembers = activeMembers;
-  const spotlightBusiness=(Array.isArray(campaign?.businesses)?campaign.businesses[0]:campaign?.businesses) as any;
-  const spotlightOffer=(Array.isArray(campaign?.offers)?campaign.offers[0]:campaign?.offers) as any;
+  const spotlightBusiness=campaign?.spotlight_business_id?activeMembers.map((member:any)=>member.businesses).find((business:any)=>business.id===campaign.spotlight_business_id):null;
+  const spotlightOffer=spotlightBusiness?.offers?.find((offer:any)=>offer.id===campaign?.spotlight_offer_id)||null;
 
   return (
     <main style={{ maxWidth: 1180, margin: '0 auto', padding: '52px 22px' }}>
