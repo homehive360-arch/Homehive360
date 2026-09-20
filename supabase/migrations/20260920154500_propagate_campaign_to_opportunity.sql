@@ -4,10 +4,11 @@ create or replace function public.create_promotion_engagement_opportunity(
 ) returns uuid
 language plpgsql security definer set search_path=''
 as $function$
-declare v_id uuid;
+declare v_id uuid; v_customer_id uuid;
 begin
  if p_source_business_id=p_receiving_business_id then raise exception 'Self-attribution is not allowed'; end if;
- if not exists(select 1 from public.leads l where l.id=p_lead_id and l.hive_id=p_hive_id and l.source_business_id=p_source_business_id) then raise exception 'Lead attribution context is invalid'; end if;
+ select l.customer_id into v_customer_id from public.leads l where l.id=p_lead_id and l.hive_id=p_hive_id and l.source_business_id=p_source_business_id;
+ if v_customer_id is null then raise exception 'Lead attribution context is invalid'; end if;
  if not exists(select 1 from public.hive_members hm where hm.hive_id=p_hive_id and hm.business_id=p_source_business_id and hm.status='active') or
     not exists(select 1 from public.hive_members hm where hm.hive_id=p_hive_id and hm.business_id=p_receiving_business_id and hm.status='active')
  then raise exception 'Businesses must be active members of the Hive'; end if;
@@ -20,8 +21,8 @@ begin
   update public.opportunities set campaign_id=coalesce(campaign_id,p_campaign_id),offer_id=coalesce(offer_id,p_offer_id),updated_at=now() where id=v_id;
   return v_id;
  end if;
- insert into public.opportunities(lead_id,hive_id,source_business_id,receiving_business_id,offer_id,campaign_id,status)
- values(p_lead_id,p_hive_id,p_source_business_id,p_receiving_business_id,p_offer_id,p_campaign_id,'new') returning id into v_id;
+ insert into public.opportunities(lead_id,hive_id,source_business_id,receiving_business_id,customer_id,offer_id,campaign_id,status)
+ values(p_lead_id,p_hive_id,p_source_business_id,p_receiving_business_id,v_customer_id,p_offer_id,p_campaign_id,'new') returning id into v_id;
  return v_id;
 end
 $function$;
