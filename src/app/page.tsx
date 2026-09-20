@@ -1,59 +1,12 @@
+'use client';
+import {useEffect,useMemo,useState} from 'react';
+import Link from 'next/link';
 import Shell from '@/components/Shell';
-import { createPublicClient } from '@/lib/supabase/public';
-
-export const dynamic = 'force-dynamic';
-
-const money = (value: number) => new Intl.NumberFormat('en-US', {
-  style: 'currency', currency: 'USD', maximumFractionDigits: 0,
-}).format(value);
-
-export default async function Page() {
-  const db = createPublicClient();
-
-  const [hivesResult, membersResult] = await Promise.all([
-    db.from('hives').select('id,name,slug,status').eq('status','active'),
-    db.from('hive_members').select('hive_id,business_id,display_order,businesses(id,name,slug)').eq('status','active').order('display_order'),
-  ]);
-
-  const hives = hivesResult.data || [];
-  const members = membersResult.data || [];
-  const golden = hives.find((h:any) => h.slug === 'golden-isles') || hives[0];
-  const goldenMembers = golden ? members.filter((m:any) => m.hive_id === golden.id) : [];
-
-  // Sensitive lead/opportunity/revenue rows stay behind RLS. The public command center
-  // intentionally shows zero until an authenticated business dashboard is introduced.
-  const leads = 0;
-  const opportunities = 0;
-  const revenue = 0;
-
-  return <Shell>
-    <div className="eyebrow">Command Center</div>
-    <h1 className="title">Home Hive 360</h1>
-    <p className="sub">Live network data from the Home Hive 360 Hub. Customer and opportunity data remains private to authorized members.</p>
-
-    <div className="grid">
-      <div className="card"><span className="label">Active Hives</span><div className="metric">{hives.length}</div></div>
-      <div className="card"><span className="label">Active Members</span><div className="metric">{members.length}</div></div>
-      <div className="card"><span className="label">Opportunities Created</span><div className="metric">{opportunities}</div></div>
-      <div className="card"><span className="label">Attributed Revenue</span><div className="metric">{money(revenue)}</div></div>
-    </div>
-
-    <section className="section two">
-      <div className="card">
-        <div className="sectionHead"><div><b>{golden?.name || 'No active Hive yet'}</b><div className="label">Live network status</div></div>{golden && <span className="badge">ACTIVE</span>}</div>
-        <div className="funnel">
-          <div className="step"><span className="label">Members</span><b>{goldenMembers.length}</b></div>
-          <div className="step"><span className="label">Leads</span><b>{leads}</b></div>
-          <div className="step"><span className="label">Opportunities</span><b>{opportunities}</b></div>
-          <div className="step"><span className="label">Revenue</span><b>{money(revenue)}</b></div>
-        </div>
-      </div>
-      <div className="card"><b>What HH360 measures</b><p className="sub" style={{marginTop:10}}>Every member should be able to see the economic value created by participating in the Hive.</p><div className="label">Lead → Exposure → Action → Opportunity → Revenue</div></div>
-    </section>
-
-    <section className="section card">
-      <div className="sectionHead"><div><b>{golden?.name || 'Hive'} Members</b><div className="label">Live member records from Supabase</div></div></div>
-      {goldenMembers.length ? <table className="table"><thead><tr><th>Business</th><th>Status</th><th>Hive</th></tr></thead><tbody>{goldenMembers.map((m:any)=><tr key={`${m.hive_id}-${m.business_id}`}><td>{m.businesses?.name || 'Business'}</td><td><span className="badge">ACTIVE</span></td><td>{golden?.name}</td></tr>)}</tbody></table> : <p className="sub">No active members found.</p>}
-    </section>
-  </Shell>;
+import {createBrowserSupabase} from '@/lib/supabase/browser';
+type Hive={id:string;name:string;slug:string};type Member={hive_id:string;business_id:string;businesses:unknown};type Lead={id:string;source_business_id:string};type Opp={id:string;status:string;estimated_value:number|null;closed_value:number|null;source_business_id:string;receiving_business_id:string};type Biz={name:string};const bizOf=(v:unknown)=>{const x=Array.isArray(v)?v[0]:v;return x&&typeof x==='object'?x as Biz:null};const money=(n:number)=>n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});
+export default function Page(){
+ const [hives,setHives]=useState<Hive[]>([]),[members,setMembers]=useState<Member[]>([]),[leads,setLeads]=useState<Lead[]>([]),[opps,setOpps]=useState<Opp[]>([]),[loading,setLoading]=useState(true),[signedIn,setSignedIn]=useState(false);
+ useEffect(()=>{(async()=>{const db=createBrowserSupabase();const auth=await db.auth.getUser();setSignedIn(Boolean(auth.data.user));const [h,m]=await Promise.all([db.from('hives').select('id,name,slug').eq('status','active'),db.from('hive_members').select('hive_id,business_id,businesses(name)').eq('status','active').order('display_order')]);setHives((h.data||[]) as Hive[]);setMembers((m.data||[]) as unknown as Member[]);if(auth.data.user){const [l,o]=await Promise.all([db.from('leads').select('id,source_business_id').limit(2000),db.from('opportunities').select('id,status,estimated_value,closed_value,source_business_id,receiving_business_id').limit(2000)]);setLeads((l.data||[]) as Lead[]);setOpps((o.data||[]) as Opp[]);}setLoading(false);})();},[]);
+ const metrics=useMemo(()=>({pipeline:opps.filter(o=>!['won','lost'].includes(o.status)).reduce((n,o)=>n+Number(o.estimated_value||0),0),revenue:opps.filter(o=>o.status==='won').reduce((n,o)=>n+Number(o.closed_value||0),0)}),[opps]);const primary=hives[0],primaryMembers=primary?members.filter(m=>m.hive_id===primary.id):[];
+ return <Shell><div className="eyebrow">Command Center</div><h1 className="title">Home Hive 360</h1><p className="sub">Your network operating system for turning member-generated demand into measurable opportunity and revenue.</p><div className="grid"><div className="card"><span className="label">Active Hives</span><div className="metric">{loading?'—':hives.length}</div></div><div className="card"><span className="label">Active Members</span><div className="metric">{loading?'—':members.length}</div></div><div className="card"><span className="label">Visible Opportunities</span><div className="metric">{loading?'—':signedIn?opps.length:'Private'}</div></div><div className="card"><span className="label">Attributed Revenue</span><div className="metric">{loading?'—':signedIn?money(metrics.revenue):'Private'}</div></div></div>{!signedIn&&!loading?<section className="section card"><div className="sectionHead"><div><b>Member metrics are protected</b><div className="label">Sign in to see leads, opportunities, pipeline and attributed revenue for businesses you are authorized to access.</div></div><Link className="btn" href="/onboarding">Sign In</Link></div></section>:null}<section className="section two"><div className="card"><div className="sectionHead"><div><b>{primary?.name||'Build your first Hive'}</b><div className="label">Live network status</div></div>{primary?<span className="badge">ACTIVE</span>:null}</div><div className="funnel"><div className="step"><span className="label">Members</span><b>{primaryMembers.length}</b></div><div className="step"><span className="label">Leads</span><b>{signedIn?leads.length:'—'}</b></div><div className="step"><span className="label">Opportunities</span><b>{signedIn?opps.length:'—'}</b></div><div className="step"><span className="label">Open Pipeline</span><b>{signedIn?money(metrics.pipeline):'—'}</b></div></div></div><div className="card"><b>HH360 Value Loop</b><p className="sub" style={{marginTop:10}}>Member marketing creates demand. The Hive creates additional exposure. HH360 attributes the resulting opportunity and revenue.</p><div className="label">Lead → Exposure → Action → Opportunity → Revenue</div></div></section><section className="section card"><div className="sectionHead"><div><b>{primary?.name||'Hive'} Members</b><div className="label">Live member records</div></div></div>{primaryMembers.length?<table className="table"><thead><tr><th>Business</th><th>Status</th><th>Hive</th></tr></thead><tbody>{primaryMembers.map(m=><tr key={m.hive_id+'-'+m.business_id}><td>{bizOf(m.businesses)?.name||'Business'}</td><td><span className="badge">ACTIVE</span></td><td>{primary?.name}</td></tr>)}</tbody></table>:<p className="sub">No active members found.</p>}</section></Shell>;
 }
