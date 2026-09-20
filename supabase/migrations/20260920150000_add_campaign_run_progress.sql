@@ -19,3 +19,34 @@ create policy "members can view campaign runs" on public.hive_campaign_runs for 
  join public.business_users bu on bu.business_id=hm.business_id
  where c.id=hive_campaign_runs.campaign_id and bu.user_id=(select auth.uid())
 ));
+
+
+-- Freeze the eligible audience at campaign activation so resumable batches
+-- operate on a stable recipient set.
+create table if not exists public.hive_campaign_recipients(
+ campaign_id uuid not null references public.hive_campaigns(id) on delete cascade,
+ lead_id uuid not null references public.leads(id) on delete cascade,
+ source_business_id uuid not null references public.businesses(id),
+ email_eligible boolean not null default false,
+ sms_eligible boolean not null default false,
+ created_at timestamptz not null default now(),
+ primary key(campaign_id,lead_id)
+);
+alter table public.hive_campaign_recipients enable row level security;
+create policy "members can view campaign recipients" on public.hive_campaign_recipients for select to authenticated using(exists(
+ select 1 from public.hive_campaigns c join public.hive_members hm on hm.hive_id=c.hive_id join public.business_users bu on bu.business_id=hm.business_id
+ where c.id=hive_campaign_recipients.campaign_id and bu.user_id=(select auth.uid())
+));
+create or replace function public.snapshot_hive_campaign_recipients(p_campaign_id uuid)
+returns bigint language plpgsql security definer set search_path='' as $function$
+declare v_hive uuid;v_count bigint;
+begin
+ select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;if v_hive is null then raise exception 'Campaign not found';end if;
+ delete from public.hive_campaign_recipients where campaign_id=p_campaign_id;
+ insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,email_eligible,sms_eligible)
+ select p_campaign_id,l.id,l.source_business_id,l.marketing_email_allowed,l.marketing_sms_allowed from public.leads l
+ join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+ where l.hive_id=v_hive and (l.marketing_email_allowed or l.marketing_sms_allowed);
+ get diagnostics v_count=row_count;return v_count;
+end $function$;
+revoke all on function public.snapshot_hive_campaign_recipients(uuid) from public,anon,authenticated;grant execute on function public.snapshot_hive_campaign_recipients(uuid) to service_role;
