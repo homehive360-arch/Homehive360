@@ -75,7 +75,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
         {activeMembers.map((member: any) => {
           const business = member.businesses;
           const service = business.services?.find((item: any) => item.category) || business.services?.[0];
-          const offer = business.offers?.find((item: any) => item.status === 'active');
+          const offer = business.offers?.find((item: any) => item.status === 'active' && (!item.starts_at || new Date(item.starts_at) <= new Date()) && (!item.ends_at || new Date(item.ends_at) >= new Date()));
           const primaryUrl = offer?.cta_url || business.website_url;
           const trackedPrimary = primaryUrl ? outboundUrl(primaryUrl, slug, business.slug, source?.slug) : null;
           const trackedWebsite = business.website_url ? outboundUrl(business.website_url, slug, business.slug, source?.slug) : null;
