@@ -270,3 +270,34 @@ end $function$;
 
 revoke all on function public.queue_hive_campaign_delivery(uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.queue_hive_campaign_delivery(uuid,uuid,text) to service_role;
+
+
+-- Delivery eligibility must honor the immutable campaign recipient snapshot.
+-- Live lead consent may become stricter after activation (opt-out), but it may
+-- never broaden a frozen campaign audience or enable a channel not frozen in it.
+create or replace function public.campaign_delivery_eligibility(
+ p_campaign_id uuid,p_lead_id uuid,p_channel text
+) returns jsonb language plpgsql security definer set search_path='' stable as $function$
+declare v_campaign public.hive_campaigns;v_lead public.leads;v_recipient public.hive_campaign_recipients;v_last timestamptz;
+begin
+ select * into v_campaign from public.hive_campaigns where id=p_campaign_id;
+ if v_campaign.id is null then return jsonb_build_object('eligible',false,'reason','campaign_not_found'); end if;
+ if v_campaign.audience_frozen_at is null then return jsonb_build_object('eligible',false,'reason','audience_not_frozen'); end if;
+ select * into v_recipient from public.hive_campaign_recipients where campaign_id=p_campaign_id and lead_id=p_lead_id;
+ if v_recipient.id is null then return jsonb_build_object('eligible',false,'reason','not_in_frozen_audience'); end if;
+ select * into v_lead from public.leads where id=p_lead_id;
+ if v_lead.id is null then return jsonb_build_object('eligible',false,'reason','audience_record_not_found'); end if;
+ if p_channel not in('email','sms') then return jsonb_build_object('eligible',false,'reason','unsupported_channel'); end if;
+ if p_channel='email' and (not v_recipient.email_eligible or not v_lead.marketing_email_allowed)
+ then return jsonb_build_object('eligible',false,'reason','email_not_enabled_or_consented'); end if;
+ if p_channel='sms' and (not v_recipient.sms_eligible or not v_lead.marketing_sms_allowed)
+ then return jsonb_build_object('eligible',false,'reason','sms_not_enabled_or_consented'); end if;
+ select max(pd.created_at) into v_last from public.promotion_deliveries pd join public.leads l on l.id=pd.lead_id
+ where l.customer_id=v_recipient.customer_id and pd.campaign_id is not null and pd.status in('queued','sending','sent','delivered');
+ if v_last is not null and v_last>now()-(v_campaign.min_contact_gap_days||' days')::interval
+ then return jsonb_build_object('eligible',false,'reason','campaign_contact_cooldown','last_contact_at',v_last); end if;
+ return jsonb_build_object('eligible',true,'reason','eligible');
+end $function$;
+
+revoke all on function public.campaign_delivery_eligibility(uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.campaign_delivery_eligibility(uuid,uuid,text) to service_role;
