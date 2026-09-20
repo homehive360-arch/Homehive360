@@ -301,3 +301,28 @@ end $function$;
 
 revoke all on function public.campaign_delivery_eligibility(uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.campaign_delivery_eligibility(uuid,uuid,text) to service_role;
+
+
+-- Existing members may predate authoritative category seats. Surface that gap
+-- explicitly instead of guessing a primary category from a multi-service profile.
+create or replace function public.hive_seat_assignment_readiness(p_hive_id uuid)
+returns jsonb language sql security invoker set search_path='' stable as $function$
+ with authorized as(
+  select exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id
+   where hm.hive_id=p_hive_id and hm.status='active' and bu.user_id=(select auth.uid())) ok
+ ), active as(
+  select hm.business_id,b.name business_name,hs.category
+  from public.hive_members hm join public.businesses b on b.id=hm.business_id
+  left join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active'
+  where hm.hive_id=p_hive_id and hm.status='active'
+ )
+ select case when (select ok from authorized) then jsonb_build_object(
+  'active_members',count(*),'assigned_seats',count(*) filter(where category is not null),
+  'missing_seats',count(*) filter(where category is null),
+  'members_missing_seats',coalesce(jsonb_agg(jsonb_build_object('business_id',business_id,'business_name',business_name)
+   order by business_name) filter(where category is null),'[]'::jsonb)
+ ) else null end from active
+$function$;
+
+revoke all on function public.hive_seat_assignment_readiness(uuid) from public,anon;
+grant execute on function public.hive_seat_assignment_readiness(uuid) to authenticated;
