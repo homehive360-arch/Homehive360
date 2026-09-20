@@ -1,3 +1,2 @@
-import Link from 'next/link';
-const items=[['/','Overview'],['/onboarding','Hive Builder'],['/hives','Hives'],['/businesses','Businesses'],['/leads','Lead Hub'],['/opportunities','Opportunities'],['/marketing','Marketing'],['/analytics','Analytics'],['/settings','Settings']];
-export default function Shell({children}:{children:React.ReactNode}){return <div className="shell"><aside className="sidebar"><div className="brand"><div className="mark">HH</div><div>Home Hive 360</div></div><nav className="nav">{items.map(([href,label])=><Link key={href} href={href}>{label}</Link>)}</nav></aside><main className="main">{children}</main></div>}
+import AppShell from './AppShell';
+export default function Shell({children}:{children:React.ReactNode}){return <AppShell>{children}</AppShell>}
