@@ -15,7 +15,7 @@ export async function POST(request:NextRequest){
  const source=(await db.from('businesses').select('name,slug').eq('id',lead.source_business_id).maybeSingle()).data;
  const hive=(await db.from('hives').select('slug,market_name').eq('id',lead.hive_id).maybeSingle()).data;
  if(!customer||!source||!hive)return NextResponse.json({error:'Promotion context incomplete'},{status:409});
- const message=buildPromotionMessage({firstName:customer.first_name||'there',sourceBusinessName:source.name,hiveSlug:hive.slug,sourceBusinessSlug:source.slug,marketName:hive.market_name,appOrigin:process.env.NEXT_PUBLIC_APP_URL});
+ let message;try{message=buildPromotionMessage({firstName:customer.first_name||'there',sourceBusinessName:source.name,hiveSlug:hive.slug,sourceBusinessSlug:source.slug,marketName:hive.market_name,appOrigin:process.env.NEXT_PUBLIC_APP_URL});}catch{return NextResponse.json({error:'Promotion link configuration unavailable'},{status:503});}
  const channels=[] as string[];if(lead.marketing_email_allowed&&customer.email)channels.push('email');if(lead.marketing_sms_allowed&&customer.phone)channels.push('sms');
  return NextResponse.json({lead_id:lead.id,channels,message});
 }
