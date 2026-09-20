@@ -28,7 +28,7 @@ as $function$
   join public.hive_members hm on hm.hive_id=hs.hive_id and hm.business_id=hs.business_id and hm.status='active'
   where hs.hive_id=p_hive_id and hs.status='active'
  ),policy as(
-  select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
+  select true email_enabled,false sms_enabled
  ),aud as(
   select count(distinct l.customer_id)::int eligible_audience
   from public.leads l
