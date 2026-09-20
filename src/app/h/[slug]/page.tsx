@@ -47,6 +47,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
   const source = ref
     ? activeMembers.map((member: any) => member.businesses).find((business: any) => business.slug === ref)
     : null;
+  const visibleMembers = source ? activeMembers.filter((member: any) => member.businesses?.id !== source.id) : activeMembers;
 
   return (
     <main style={{ maxWidth: 1180, margin: '0 auto', padding: '52px 22px' }}>
@@ -68,11 +69,11 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
       <div className="sectionHead" style={{ marginTop: 34 }}>
         <h2>Meet your Home Hive</h2>
-        <span className="badge">{activeMembers.length} MEMBERS · LOCAL · CONNECTED</span>
+        <span className="badge">{visibleMembers.length} {source ? 'TRUSTED OPTIONS' : 'MEMBERS'} · LOCAL · CONNECTED</span>
       </div>
 
       <div className="grid">
-        {activeMembers.map((member: any) => {
+        {visibleMembers.map((member: any) => {
           const business = member.businesses;
           const service = business.services?.find((item: any) => item.category) || business.services?.[0];
           const offer = business.offers?.find((item: any) => item.status === 'active' && (!item.starts_at || new Date(item.starts_at) <= new Date()) && (!item.ends_at || new Date(item.ends_at) >= new Date()));
@@ -108,7 +109,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
         })}
       </div>
 
-      {!activeMembers.length ? (
+      {!visibleMembers.length ? (
         <section className="section card"><h2>This Hive is getting ready.</h2><p className="sub">Member businesses will appear here as they join the network.</p></section>
       ) : null}
 
