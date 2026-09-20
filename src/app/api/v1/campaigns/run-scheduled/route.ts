@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server';import {createClient} from '@supabase/supabase-js';
 export async function GET(request:NextRequest){return run(request)}export async function POST(request:NextRequest){return run(request)}
 async function run(request:NextRequest){
- const secret=process.env.CAMPAIGN_CRON_SECRET,url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SECRET_KEY;
+ const secret=process.env.CRON_SECRET,url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SECRET_KEY;
  if(!secret||!url||!key)return NextResponse.json({error:'Campaign worker not configured'},{status:503});
  if(request.headers.get('authorization')!==`Bearer ${secret}`)return NextResponse.json({error:'Unauthorized'},{status:401});
  const db=createClient(url,key),errors:any[]=[];let activatedIds:string[]=[];
