@@ -149,3 +149,47 @@ $function$;
 
 revoke all on function public.hive_build_readiness(uuid) from public,anon;
 grant execute on function public.hive_build_readiness(uuid) to authenticated;
+
+
+create or replace function public.activate_hive_prospect(
+ p_hive_id uuid,
+ p_business_id uuid
+) returns public.hive_members
+language plpgsql security definer set search_path=''
+as $function$
+declare v_prospect public.hive_prospects;v_member public.hive_members;
+begin
+ if not exists(
+  select 1 from public.hive_members hm
+  join public.business_users bu on bu.business_id=hm.business_id
+  where hm.hive_id=p_hive_id and hm.status='active'
+   and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')
+ ) then raise exception 'Not authorized to activate members for this Hive'; end if;
+
+ select * into v_prospect from public.hive_prospects
+ where hive_id=p_hive_id and business_id=p_business_id for update;
+ if v_prospect.id is null then raise exception 'Hive prospect not found'; end if;
+ if v_prospect.roster_state<>'accepted' then raise exception 'Prospect must accept before membership activation'; end if;
+
+ -- Preserve category exclusivity at activation even if the roster was created
+ -- before another member occupied the same service category.
+ if exists(
+  select 1 from public.hive_members hm
+  join public.services s on s.business_id=hm.business_id
+  where hm.hive_id=p_hive_id and hm.status='active'
+   and lower(trim(s.category))=lower(trim(v_prospect.category))
+   and hm.business_id<>p_business_id
+ ) then raise exception 'Category seat is already occupied by an active Hive member'; end if;
+
+ insert into public.hive_members(hive_id,business_id,status)
+ values(p_hive_id,p_business_id,'active')
+ on conflict(hive_id,business_id) do update set status='active'
+ returning * into v_member;
+
+ delete from public.hive_prospects where id=v_prospect.id;
+ return v_member;
+end
+$function$;
+
+revoke all on function public.activate_hive_prospect(uuid,uuid) from public,anon;
+grant execute on function public.activate_hive_prospect(uuid,uuid) to authenticated;
