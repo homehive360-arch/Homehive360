@@ -20,7 +20,7 @@ begin
  end if;
 
  with policy as (
-  select email_enabled,sms_enabled from public.hive_campaign_policy where hive_id=p_hive_id
+  select true email_enabled,false sms_enabled
  ), eligible as (
   select distinct on(l.customer_id) l.customer_id,l.source_business_id
   from public.leads l
@@ -118,9 +118,9 @@ grant execute on function public.mark_hive_campaign_audience_frozen(uuid) to ser
 
 create or replace function public.snapshot_hive_campaign_recipients(p_campaign_id uuid)
 returns bigint language plpgsql security definer set search_path='' as $function$
-declare v_hive uuid;v_count bigint;v_frozen timestamptz;
+declare v_hive uuid;v_count bigint;v_frozen timestamptz;v_email boolean;v_sms boolean;
 begin
- select hive_id,audience_frozen_at into v_hive,v_frozen
+ select hive_id,audience_frozen_at,email_enabled,sms_enabled into v_hive,v_frozen,v_email,v_sms
  from public.hive_campaigns where id=p_campaign_id for update;
  if v_hive is null then raise exception 'Campaign not found';end if;
  if v_frozen is not null then
@@ -130,12 +130,11 @@ begin
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible)
  select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible from (
   select distinct on(l.customer_id) l.id lead_id,l.source_business_id,l.customer_id,
-   p.email_enabled and bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
-   p.sms_enabled and bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
+   v_email and bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
+   v_sms and bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
   from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
-  join public.hive_campaign_policy p on p.hive_id=l.hive_id
   where l.hive_id=v_hive and l.customer_id is not null
-   and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
+   and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
   order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
  ) x;
  get diagnostics v_count=row_count;
