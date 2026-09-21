@@ -17,5 +17,5 @@ export async function POST(request:NextRequest){
  const eventType=body.offerId?'offer.clicked':'member.clicked';
  const eventKey=delivery?'click:'+delivery.id+':'+business.id+':'+(body.offerId||'member')+':'+eventType:'organic:'+hive.id+':'+business.id+':'+(body.offerId||'member')+':'+eventType+':'+new Date().toISOString().slice(0,13);
  const result=await db.rpc('record_public_attribution_event',{p_event_key:eventKey,p_hive_id:hive.id,p_business_id:business.id,p_customer_id:delivery?.customer_id||null,p_lead_id:delivery?.lead_id||null,p_event_type:eventType,p_properties:{delivery_id:delivery?.id||null,source_business_id:sourceId,source_slug:sourceSlug,target_business_id:business.id,opportunity_id:opportunityId,offer_id:body.offerId||null,campaign_id:delivery?.campaign_id||null,channel:'hive_page',is_source_business:isSourceBusiness,attributed:!isSourceBusiness&&Boolean(delivery)}});
- if(result.error)return NextResponse.json({error:'Event not recorded'},{status:500});return NextResponse.json({ok:true,attributed:Boolean(delivery),opportunity_created:Boolean(opportunityId),recorded:Boolean(result.data)});
+ if(result.error)return NextResponse.json({error:'Event not recorded'},{status:500});return NextResponse.json({ok:true,attributed:!isSourceBusiness&&Boolean(delivery),opportunity_created:Boolean(opportunityId),recorded:Boolean(result.data)});
 }
