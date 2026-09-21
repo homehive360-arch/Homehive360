@@ -377,7 +377,13 @@ begin
  if p_offer_id is not null and not exists(select 1 from public.offers o where o.id=p_offer_id and o.business_id=p_receiving_business_id and o.status='active' and (o.hive_id is null or o.hive_id=p_hive_id) and (o.starts_at is null or o.starts_at<=now()) and (o.ends_at is null or o.ends_at>=now())) then raise exception 'Offer is not eligible'; end if;
  if p_campaign_id is not null then
   if not exists(select 1 from public.hive_campaigns c where c.id=p_campaign_id and c.hive_id=p_hive_id and c.status in('active','completed')) then raise exception 'Campaign attribution context is invalid'; end if;
-  if not exists(select 1 from public.hive_campaign_recipients r where r.campaign_id=p_campaign_id and r.lead_id=p_lead_id and r.customer_id=v_customer_id and r.source_business_id=p_source_business_id) then raise exception 'Campaign attribution does not match frozen audience'; end if;
+  if not exists(
+   select 1 from public.hive_campaign_recipients r
+   join public.promotion_deliveries d on d.campaign_id=r.campaign_id and d.lead_id=r.lead_id
+    and d.customer_id=r.customer_id and d.source_business_id=r.source_business_id
+   where r.campaign_id=p_campaign_id and r.lead_id=p_lead_id and r.customer_id=v_customer_id
+    and r.source_business_id=p_source_business_id and d.status in('sent','delivered')
+  ) then raise exception 'Campaign attribution requires a dispatched frozen-audience delivery'; end if;
  end if;
  select id into v_id from public.opportunities where lead_id=p_lead_id and receiving_business_id=p_receiving_business_id order by created_at limit 1;
  if v_id is not null then
