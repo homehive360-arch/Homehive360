@@ -196,6 +196,8 @@ grant execute on function public.create_monthly_hive_campaign(uuid,date,uuid,uui
 -- A campaign audience is immutable once activation begins, including the valid
 -- zero-recipient case. A timestamp is the freeze marker; row count is not.
 alter table public.hive_campaigns add column if not exists audience_frozen_at timestamptz;
+alter table public.hive_campaign_recipients add column if not exists recipient_key text;
+create unique index if not exists hive_campaign_recipients_unique_person_idx on public.hive_campaign_recipients(campaign_id,recipient_key) where recipient_key is not null;
 
 create or replace function public.mark_hive_campaign_audience_frozen(p_campaign_id uuid)
 returns timestamptz language plpgsql security definer set search_path=''
@@ -226,15 +228,16 @@ begin
   select count(*) into v_count from public.hive_campaign_recipients where campaign_id=p_campaign_id;
   return v_count;
  end if;
- insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible)
- select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible from (
-  select distinct on(l.customer_id) l.id lead_id,l.source_business_id,l.customer_id,
-   v_email and bool_or(l.marketing_email_allowed) over(partition by l.customer_id) email_eligible,
-   v_sms and bool_or(l.marketing_sms_allowed) over(partition by l.customer_id) sms_eligible
+ insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible,recipient_key)
+ select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible,x.recipient_key from (
+  select distinct on(public.hive_recipient_identity_key(l.customer_id)) l.id lead_id,l.source_business_id,l.customer_id,
+   bool_or(v_email and l.marketing_email_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) email_eligible,
+   bool_or(v_sms and l.marketing_sms_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) sms_eligible,
+   public.hive_recipient_identity_key(l.customer_id) recipient_key
   from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
   where l.hive_id=v_hive and l.customer_id is not null
    and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
-  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+  order by public.hive_recipient_identity_key(l.customer_id),l.received_at desc nulls last,l.created_at desc,l.id desc
  ) x;
  get diagnostics v_count=row_count;
  update public.hive_campaigns set audience_frozen_at=now(),updated_at=now() where id=p_campaign_id;
