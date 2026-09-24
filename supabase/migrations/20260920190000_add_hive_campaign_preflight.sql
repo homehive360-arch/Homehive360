@@ -1,3 +1,8 @@
+-- Privacy-safe recipient identity requires pgcrypto. Supabase conventionally installs
+-- extensions in the extensions schema; make fresh installs self-contained.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+
 -- Tighten Spotlight rotation after authoritative member seats exist.
 create or replace function public.next_hive_spotlight_member(p_hive_id uuid)
 returns table(business_id uuid,business_name text,last_spotlight_month date)
