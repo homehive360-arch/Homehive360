@@ -486,7 +486,7 @@ grant execute on function public.hive_campaign_reach(uuid) to authenticated;
 -- RLS-scoped analytics summary. Keep the existing response shape while limiting
 -- every metric to Hives visible to the signed-in user's businesses.
 create or replace function public.analytics_summary(p_days integer default 30)
-returns jsonb language sql security invoker set search_path='' stable as $function$
+returns jsonb language sql security definer set search_path='' stable as $function$
  with cutoff as(select now()-(greatest(1,least(coalesce(p_days,30),365))||' days')::interval ts),
  visible_businesses as(select distinct bu.business_id from public.business_users bu where bu.user_id=(select auth.uid())),
  visible_hives as(select distinct hm.hive_id from public.hive_members hm join visible_businesses vb on vb.business_id=hm.business_id),
@@ -502,7 +502,7 @@ grant execute on function public.analytics_summary(integer) to authenticated;
 -- Promotion funnel aligned to campaign audience semantics. Audience is unique
 -- campaign recipients in the reporting window, not newly ingested lead rows.
 create or replace function public.promotion_funnel_summary(p_days integer default 30)
-returns jsonb language sql security invoker set search_path='' stable as $function$
+returns jsonb language sql security definer set search_path='' stable as $function$
  with cutoff as(select now()-(greatest(1,least(coalesce(p_days,30),365))||' days')::interval ts),
  visible_businesses as(select distinct bu.business_id from public.business_users bu where bu.user_id=(select auth.uid())),
  visible_hives as(select distinct hm.hive_id from public.hive_members hm join visible_businesses vb on vb.business_id=hm.business_id),
