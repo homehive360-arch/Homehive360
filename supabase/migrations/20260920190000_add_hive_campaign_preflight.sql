@@ -205,8 +205,8 @@ begin
   if not coalesce((v_ready->>'launch_ready')::boolean,false) then
    update public.hive_campaigns set status='draft',scheduled_at=null,updated_at=now() where id=c.id;continue;
   end if;
-  perform public.refresh_hive_campaign_audiences(c.id);
   perform public.snapshot_hive_campaign_members(c.id);
+  perform public.refresh_hive_campaign_audiences(c.id);
   perform public.snapshot_hive_campaign_recipients(c.id);
   update public.hive_campaigns set status='active',updated_at=now() where id=c.id;
   campaign_id:=c.id;return next;
@@ -239,9 +239,11 @@ begin
    select public.hive_launch_readiness(v.hive_id) into v_ready;
    if not coalesce((v_ready->>'launch_ready')::boolean,false) then raise exception 'Hive is not launch ready'; end if;
   end if;
-  perform public.refresh_hive_campaign_audiences(p_campaign_id);
   if p_status='active' then
    perform public.snapshot_hive_campaign_members(p_campaign_id);
+  end if;
+  perform public.refresh_hive_campaign_audiences(p_campaign_id);
+  if p_status='active' then
    perform public.snapshot_hive_campaign_recipients(p_campaign_id);
   end if;
  end if;
