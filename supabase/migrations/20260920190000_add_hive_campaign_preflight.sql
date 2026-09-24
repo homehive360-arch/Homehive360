@@ -90,13 +90,13 @@ declare v_hive uuid;v_result jsonb;
 begin
  select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;
  if v_hive is null then raise exception 'Campaign not found'; end if;
- if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
+ if auth.role()<>'service_role' and not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
  with a as(select source_business_id,count(*)::bigint contributed_relationships,count(*) filter(where email_eligible)::bigint email_eligible_relationships,count(*) filter(where sms_eligible)::bigint sms_eligible_relationships from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id group by source_business_id),u as(select count(distinct recipient_key)::bigint unique_recipients from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id)
  select jsonb_build_object('unique_recipients',coalesce((select unique_recipients from u),0),'member_contributions',coalesce(jsonb_agg(jsonb_build_object('source_business_id',a.source_business_id,'contributed_relationships',a.contributed_relationships,'email_eligible_relationships',a.email_eligible_relationships,'sms_eligible_relationships',a.sms_eligible_relationships) order by a.source_business_id),'[]'::jsonb)) into v_result from a;
  return v_result;
 end $function$;
 revoke all on function public.hive_campaign_contribution_summary(uuid) from public,anon;
-grant execute on function public.hive_campaign_contribution_summary(uuid) to authenticated;
+grant execute on function public.hive_campaign_contribution_summary(uuid) to authenticated,service_role;
 -- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 -- Final projected-audience refresh: assign each unique person to one deterministic
