@@ -164,6 +164,15 @@ end $function$;
 revoke all on function public.snapshot_hive_campaign_members(uuid) from public,anon,authenticated;
 grant execute on function public.snapshot_hive_campaign_members(uuid) to postgres,service_role;
 
+-- Service-only boolean participant check for public API routes. The raw frozen
+-- participant ledger remains inaccessible to authenticated/anonymous clients.
+create or replace function public.is_hive_campaign_participant(p_campaign_id uuid,p_business_id uuid)
+returns boolean language sql security definer set search_path='' stable as $function$
+ select exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id and cm.business_id=p_business_id)
+$function$;
+revoke all on function public.is_hive_campaign_participant(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.is_hive_campaign_participant(uuid,uuid) to service_role,postgres;
+
 -- Historical participant snapshot is internal campaign evidence. Keep raw membership
 -- rows private; expose only aggregate reporting through authorized RPCs.
 revoke all on table public.hive_campaign_members from public,anon,authenticated;
