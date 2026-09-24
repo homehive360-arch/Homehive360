@@ -86,6 +86,7 @@ begin
 end $function$;
 revoke all on function public.hive_campaign_contribution_summary(uuid) from public,anon;
 grant execute on function public.hive_campaign_contribution_summary(uuid) to authenticated;
+-- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 -- Final projected-audience refresh: assign each unique person to one deterministic
 -- delivery source for reach accounting while preserving every member relationship
@@ -337,6 +338,7 @@ $function$;
 
 revoke all on function public.hive_campaign_reach(uuid) from public,anon;
 grant execute on function public.hive_campaign_reach(uuid) to authenticated;
+-- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 
 -- RLS-scoped analytics summary. Keep the existing response shape while limiting
@@ -426,6 +428,7 @@ returns jsonb language sql security invoker set search_path='' stable as $functi
 $function$;
 revoke all on function public.hive_campaign_performance(uuid) from public,anon;
 grant execute on function public.hive_campaign_performance(uuid) to authenticated;
+-- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 -- Normalize funnel reporting to the actual promotion_delivery_status domain.
 -- Provider bounce detail can be added later as a separate delivery-event field;
@@ -462,6 +465,7 @@ $function$;
 
 revoke all on function public.hive_campaign_funnel(uuid) from public,anon;
 grant execute on function public.hive_campaign_funnel(uuid) to authenticated;
+-- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 
 -- An active campaign must have an immutable audience snapshot before deliveries
