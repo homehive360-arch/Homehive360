@@ -385,6 +385,9 @@ begin
     and r.source_business_id=p_source_business_id and d.status in('sent','delivered')
   ) then raise exception 'Campaign attribution requires a dispatched frozen-audience delivery'; end if;
  end if;
+ -- Serialize idempotency on the exact attribution identity. Without this lock,
+ -- two simultaneous clicks can both observe no opportunity and insert duplicates.
+ perform pg_advisory_xact_lock(hashtextextended('hh360:opp:'||p_lead_id::text||':'||p_receiving_business_id::text||':'||coalesce(p_campaign_id::text,'organic'),0));
  select id into v_id from public.opportunities
  where lead_id=p_lead_id and receiving_business_id=p_receiving_business_id
   and campaign_id is not distinct from p_campaign_id
