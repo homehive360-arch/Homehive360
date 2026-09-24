@@ -332,6 +332,21 @@ revoke all on function public.hive_campaign_reach(uuid) from public,anon;
 grant execute on function public.hive_campaign_reach(uuid) to authenticated;
 
 
+-- Member value scorecard aligned to the campaign network model. Contribution is
+-- campaign audience relationships, not raw lead ingestion volume.
+create or replace function public.member_value_scorecard(p_days integer default 30)
+returns table(id uuid,name text,contributed bigint,received bigint,sourced bigint,pipeline numeric,revenue numeric,wins bigint)
+language sql security invoker set search_path='' stable as $function$
+ with cutoff as(select now()-(greatest(1,least(coalesce(p_days,30),365))||' days')::interval ts),
+ visible as(select b.id,b.name from public.businesses b where exists(select 1 from public.business_users bu where bu.business_id=b.id and bu.user_id=(select auth.uid()))),
+ contribution as(select ac.source_business_id id,count(*)::bigint contributed from public.hive_campaign_audience_contributions ac join public.hive_campaigns hc on hc.id=ac.campaign_id,cutoff c where hc.created_at>=c.ts group by ac.source_business_id),
+ received as(select o.receiving_business_id id,count(*)::bigint received,count(*) filter(where o.status='won')::bigint wins,coalesce(sum(o.estimated_value) filter(where o.status not in('won','lost')),0)::numeric pipeline,coalesce(sum(o.closed_value) filter(where o.status='won'),0)::numeric revenue from public.opportunities o,cutoff c where o.created_at>=c.ts group by o.receiving_business_id),
+ sourced as(select o.source_business_id id,count(*)::bigint sourced from public.opportunities o,cutoff c where o.created_at>=c.ts group by o.source_business_id)
+ select v.id,v.name,coalesce(a.contributed,0),coalesce(r.received,0),coalesce(s.sourced,0),coalesce(r.pipeline,0),coalesce(r.revenue,0),coalesce(r.wins,0) from visible v left join contribution a on a.id=v.id left join received r on r.id=v.id left join sourced s on s.id=v.id order by v.name
+$function$;
+revoke all on function public.member_value_scorecard(integer) from public,anon;
+grant execute on function public.member_value_scorecard(integer) to authenticated;
+
 -- Whole-Hive member exchange reporting. Exposure is campaign reach while the member
 -- was an active participant, not clicks. Clicks remain engagement metrics.
 create or replace function public.member_promotion_exchange(p_days integer default 30)
