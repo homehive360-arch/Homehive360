@@ -26,6 +26,12 @@ $function$;
 revoke all on function public.hive_recipient_identity_key(uuid) from public,anon,authenticated;
 grant execute on function public.hive_recipient_identity_key(uuid) to service_role;
 
+-- Internal SECURITY DEFINER routines also call the identity helper while running
+-- as the function owner. Keep the helper private from client roles, but allow
+-- authenticated operators to reach it only through authorized wrapper RPCs.
+grant execute on function public.hive_recipient_identity_key(uuid) to postgres;
+
+
 -- Preserve member audience contribution independently from send deduplication.
 -- A shared homeowner can therefore count as a relationship for multiple members
 -- while the campaign still chooses a single delivery anchor for that person.
