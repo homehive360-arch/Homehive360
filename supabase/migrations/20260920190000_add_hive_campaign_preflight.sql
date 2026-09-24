@@ -272,16 +272,22 @@ begin
   return v_count;
  end if;
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible,recipient_key)
- select p_campaign_id,x.lead_id,x.source_business_id,x.customer_id,x.email_eligible,x.sms_eligible,x.recipient_key from (
-  select distinct on(public.hive_recipient_identity_key(l.customer_id)) l.id lead_id,l.source_business_id,l.customer_id,
-   bool_or(v_email and l.marketing_email_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) email_eligible,
-   bool_or(v_sms and l.marketing_sms_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) sms_eligible,
-   public.hive_recipient_identity_key(l.customer_id) recipient_key
+ with candidates as(
+  select l.id lead_id,l.source_business_id,l.customer_id,l.received_at,l.created_at,
+   public.hive_recipient_identity_key(l.customer_id) recipient_key,
+   (v_email and l.marketing_email_allowed) row_email_eligible,
+   (v_sms and l.marketing_sms_allowed) row_sms_eligible
   from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
-  where l.hive_id=v_hive and l.customer_id is not null
-   and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
-  order by public.hive_recipient_identity_key(l.customer_id),l.received_at desc nulls last,l.created_at desc,l.id desc
- ) x;
+  where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
+ ), aggregate_eligibility as(
+  select recipient_key,bool_or(row_email_eligible) email_eligible,bool_or(row_sms_eligible) sms_eligible from candidates group by recipient_key
+ ), anchors as(
+  select distinct on(c.recipient_key) c.lead_id,c.source_business_id,c.customer_id,c.recipient_key,a.email_eligible,a.sms_eligible
+  from candidates c join aggregate_eligibility a using(recipient_key)
+  where (a.email_eligible and c.row_email_eligible) or (not a.email_eligible and a.sms_eligible and c.row_sms_eligible)
+  order by c.recipient_key,c.received_at desc nulls last,c.created_at desc,c.lead_id desc
+ )
+ select p_campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible,recipient_key from anchors;
  get diagnostics v_count=row_count;
  update public.hive_campaigns set audience_frozen_at=now(),updated_at=now() where id=p_campaign_id;
  return v_count;
