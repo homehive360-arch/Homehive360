@@ -164,6 +164,15 @@ end $function$;
 revoke all on function public.snapshot_hive_campaign_members(uuid) from public,anon,authenticated;
 grant execute on function public.snapshot_hive_campaign_members(uuid) to postgres,service_role;
 
+-- Service-only campaign offer check. Public click handling needs to recognize the
+-- campaign's recorded Spotlight offer without broad campaign-table visibility.
+create or replace function public.is_hive_campaign_spotlight_offer(p_campaign_id uuid,p_business_id uuid,p_offer_id uuid)
+returns boolean language sql security definer set search_path='' stable as $function$
+ select exists(select 1 from public.hive_campaigns c join public.offers o on o.id=c.spotlight_offer_id where c.id=p_campaign_id and c.spotlight_offer_id=p_offer_id and c.spotlight_business_id=p_business_id and o.business_id=p_business_id)
+$function$;
+revoke all on function public.is_hive_campaign_spotlight_offer(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.is_hive_campaign_spotlight_offer(uuid,uuid,uuid) to service_role,postgres;
+
 -- Service-only boolean participant check for public API routes. The raw frozen
 -- participant ledger remains inaccessible to authenticated/anonymous clients.
 create or replace function public.is_hive_campaign_participant(p_campaign_id uuid,p_business_id uuid)
