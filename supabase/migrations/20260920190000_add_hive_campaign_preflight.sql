@@ -113,6 +113,9 @@ begin
  if v_hive is null then raise exception 'Campaign not found'; end if;
  if auth.role()<>'service_role' and not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')) then raise exception 'Not authorized to manage this Hive'; end if;
  perform public.refresh_hive_campaign_audience_contributions(p_campaign_id);
+ -- Rebuild this derived projection from scratch. Upsert alone leaves stale rows for
+ -- businesses that were removed before activation or excluded by the frozen snapshot.
+ delete from public.hive_campaign_audiences where campaign_id=p_campaign_id;
  insert into public.hive_campaign_audiences(campaign_id,source_business_id,eligible_customers,email_eligible,sms_eligible)
  with candidates as(
   select l.source_business_id,l.customer_id,l.marketing_email_allowed,l.marketing_sms_allowed,public.hive_recipient_identity_key(l.customer_id) recipient_key,l.received_at,l.created_at,l.id,
