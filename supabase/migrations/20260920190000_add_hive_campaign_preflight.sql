@@ -318,33 +318,37 @@ create or replace function public.hive_campaign_reach(p_campaign_id uuid)
 returns jsonb language sql security invoker set search_path='' stable as $function$
  with c as(
   select spotlight_business_id,audience_frozen_at from public.hive_campaigns where id=p_campaign_id
- ), frozen as(
-  select count(*)::bigint total_reach,
-   count(*) filter(where r.source_business_id=(select spotlight_business_id from c))::bigint owned_reach,
-   count(*) filter(where r.source_business_id<>(select spotlight_business_id from c))::bigint incremental_hive_reach,
-   count(*) filter(where r.email_eligible)::bigint email_reach,
-   count(*) filter(where r.sms_eligible)::bigint sms_reach
-  from public.hive_campaign_recipients r where r.campaign_id=p_campaign_id
- ), projected as(
-  select coalesce(sum(a.eligible_customers),0)::bigint total_reach,
-   coalesce(sum(a.eligible_customers) filter(where a.source_business_id=(select spotlight_business_id from c)),0)::bigint owned_reach,
-   coalesce(sum(a.eligible_customers) filter(where a.source_business_id<>(select spotlight_business_id from c)),0)::bigint incremental_hive_reach,
-   coalesce(sum(a.email_eligible),0)::bigint email_reach,
-   coalesce(sum(a.sms_eligible),0)::bigint sms_reach
-  from public.hive_campaign_audiences a where a.campaign_id=p_campaign_id
+ ), contribution_people as(
+  select ac.recipient_key,
+   bool_or(ac.source_business_id=(select spotlight_business_id from c)) owned,
+   bool_or(ac.email_eligible) email_ok,bool_or(ac.sms_eligible) sms_ok
+  from public.hive_campaign_audience_contributions ac where ac.campaign_id=p_campaign_id group by ac.recipient_key
+ ), frozen_people as(
+  select r.recipient_key,r.email_eligible email_ok,r.sms_eligible sms_ok,
+   coalesce(cp.owned,false) owned
+  from public.hive_campaign_recipients r left join contribution_people cp on cp.recipient_key=r.recipient_key
+  where r.campaign_id=p_campaign_id
+ ), projected_people as(
+  select cp.recipient_key,cp.email_ok,cp.sms_ok,cp.owned from contribution_people cp
  ), chosen as(
-  select * from frozen where (select audience_frozen_at from c) is not null
+  select * from frozen_people where (select audience_frozen_at from c) is not null
   union all
-  select * from projected where (select audience_frozen_at from c) is null
+  select * from projected_people where (select audience_frozen_at from c) is null
+ ), totals as(
+  select count(*)::bigint total_reach,count(*) filter(where owned)::bigint owned_reach,
+   count(*) filter(where not owned)::bigint incremental_hive_reach,
+   count(*) filter(where email_ok)::bigint email_reach,count(*) filter(where sms_ok)::bigint sms_reach from chosen
  )
  select jsonb_build_object('owned_reach',owned_reach,'incremental_hive_reach',incremental_hive_reach,
   'total_reach',total_reach,'email_reach',email_reach,'sms_reach',sms_reach,
-  'audience_frozen',(select audience_frozen_at is not null from c)) from chosen
+  'audience_frozen',(select audience_frozen_at is not null from c)) from totals
 $function$;
 
 revoke all on function public.hive_campaign_reach(uuid) from public,anon;
 grant execute on function public.hive_campaign_reach(uuid) to authenticated;
--- Access is additionally scoped inside the function or by campaign RLS/visibility.
+-- Owned reach is relationship-based: if the Spotlight member owns an eligible
+-- relationship with the person, that person is owned reach even when another
+-- member's consented relationship is selected as the physical delivery anchor.
 
 
 -- RLS-scoped analytics summary. Keep the existing response shape while limiting
