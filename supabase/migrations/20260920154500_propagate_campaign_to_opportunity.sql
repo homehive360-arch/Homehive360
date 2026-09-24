@@ -16,9 +16,12 @@ begin
  then raise exception 'Offer is not eligible'; end if;
  if p_campaign_id is not null and not exists(select 1 from public.hive_campaigns c where c.id=p_campaign_id and c.hive_id=p_hive_id and c.status in('active','completed'))
  then raise exception 'Campaign attribution context is invalid'; end if;
- select id into v_id from public.opportunities where lead_id=p_lead_id and receiving_business_id=p_receiving_business_id order by created_at limit 1;
+ select id into v_id from public.opportunities
+ where lead_id=p_lead_id and receiving_business_id=p_receiving_business_id
+  and campaign_id is not distinct from p_campaign_id
+ order by created_at limit 1;
  if v_id is not null then
-  update public.opportunities set campaign_id=coalesce(campaign_id,p_campaign_id),offer_id=coalesce(offer_id,p_offer_id),updated_at=now() where id=v_id;
+  update public.opportunities set offer_id=coalesce(offer_id,p_offer_id),updated_at=now() where id=v_id;
   return v_id;
  end if;
  insert into public.opportunities(lead_id,hive_id,source_business_id,receiving_business_id,customer_id,offer_id,campaign_id,status)
