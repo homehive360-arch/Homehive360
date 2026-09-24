@@ -218,7 +218,7 @@ grant execute on function public.hive_campaign_planner(uuid) to authenticated;
 -- summing member-owned customer rows. Member relationships remain intact; this
 -- gate measures the audience the network can actually contact without duplicates.
 create or replace function public.hive_launch_readiness(p_hive_id uuid)
-returns jsonb language sql security invoker set search_path='' stable as $function$
+returns jsonb language sql security definer set search_path='' stable as $function$
  with authorized as(
   select exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=p_hive_id and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')) ok
  ),cfg as(select min_launch_members,min_launch_audience from public.hives where id=p_hive_id),
@@ -235,7 +235,7 @@ grant execute on function public.hive_launch_readiness(uuid) to authenticated;
 -- Preflight a Hive's first/next monthly campaign. This keeps launch readiness,
 -- Spotlight rotation and incremental network reach in one operator-facing view.
 create or replace function public.hive_campaign_preflight(p_hive_id uuid)
-returns jsonb language plpgsql security invoker set search_path=''
+returns jsonb language plpgsql security definer set search_path=''
 as $function$
 declare
  v_ready jsonb;v_spotlight uuid;v_owned bigint:=0;v_incremental bigint:=0;v_total bigint:=0;
