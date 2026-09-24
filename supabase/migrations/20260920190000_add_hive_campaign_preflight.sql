@@ -75,8 +75,11 @@ begin
   select distinct on(l.source_business_id,l.customer_id) l.source_business_id,l.customer_id,
    v_email and bool_or(l.marketing_email_allowed) over(partition by l.source_business_id,l.customer_id) email_eligible,
    v_sms and bool_or(l.marketing_sms_allowed) over(partition by l.source_business_id,l.customer_id) sms_eligible
-  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
-  where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
+  from public.leads l
+  where l.hive_id=v_hive and l.customer_id is not null
+   and ((exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id) and exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id and cm.business_id=l.source_business_id))
+    or (not exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id) and exists(select 1 from public.hive_members hm where hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active')))
+   and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
   order by l.source_business_id,l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
  ) x;
  get diagnostics v_count=row_count; return v_count;
@@ -115,8 +118,11 @@ begin
   select l.source_business_id,l.customer_id,l.marketing_email_allowed,l.marketing_sms_allowed,public.hive_recipient_identity_key(l.customer_id) recipient_key,l.received_at,l.created_at,l.id,
    bool_or(v_email and l.marketing_email_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) email_ok,
    bool_or(v_sms and l.marketing_sms_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) sms_ok
-  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
-  where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
+  from public.leads l
+  where l.hive_id=v_hive and l.customer_id is not null
+   and ((exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id) and exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id and cm.business_id=l.source_business_id))
+    or (not exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id) and exists(select 1 from public.hive_members hm where hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active')))
+   and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
  ), unique_people as(
   select distinct on(recipient_key) recipient_key,source_business_id,email_ok,sms_ok from candidates
   where (email_ok and (v_email and marketing_email_allowed)) or (not email_ok and sms_ok and (v_sms and marketing_sms_allowed))
