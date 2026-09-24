@@ -332,6 +332,30 @@ revoke all on function public.hive_campaign_reach(uuid) from public,anon;
 grant execute on function public.hive_campaign_reach(uuid) to authenticated;
 
 
+-- Final performance semantics: delivery_total is all campaign delivery rows;
+-- queued is only work that has not yet been claimed. Keep legacy keys while
+-- removing the misleading count(*) => queued behavior from the earlier migration.
+create or replace function public.hive_campaign_performance(p_campaign_id uuid)
+returns jsonb language sql security invoker set search_path='' stable as $function$
+ with d as(
+  select count(*)::bigint delivery_total,
+   count(*) filter(where status='queued')::bigint queued,
+   count(*) filter(where status='sending')::bigint sending,
+   count(*) filter(where status in('sent','delivered'))::bigint sent,
+   count(*) filter(where status='delivered')::bigint delivered,
+   count(*) filter(where status='failed')::bigint failed,
+   count(distinct source_business_id)::bigint contributing_members
+  from public.promotion_deliveries where campaign_id=p_campaign_id
+ ),o as(
+  select count(*)::bigint opportunities,count(*) filter(where status='won')::bigint wins,
+   coalesce(sum(closed_value) filter(where status='won'),0)::numeric revenue
+  from public.opportunities where campaign_id=p_campaign_id
+ )
+ select jsonb_build_object('contributing_members',coalesce(d.contributing_members,0),'delivery_total',coalesce(d.delivery_total,0),'queued',coalesce(d.queued,0),'sending',coalesce(d.sending,0),'sent',coalesce(d.sent,0),'delivered',coalesce(d.delivered,0),'failed',coalesce(d.failed,0),'opportunities',coalesce(o.opportunities,0),'wins',coalesce(o.wins,0),'attributed_revenue',coalesce(o.revenue,0)) from d cross join o
+$function$;
+revoke all on function public.hive_campaign_performance(uuid) from public,anon;
+grant execute on function public.hive_campaign_performance(uuid) to authenticated;
+
 -- Normalize funnel reporting to the actual promotion_delivery_status domain.
 -- Provider bounce detail can be added later as a separate delivery-event field;
 -- it is not a valid delivery status today.
