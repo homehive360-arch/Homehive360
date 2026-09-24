@@ -110,19 +110,20 @@ begin
 
  with policy as (
   select true email_enabled,false sms_enabled
- ), eligible as (
-  select distinct on(l.customer_id) l.customer_id,l.source_business_id
-  from public.leads l
-  join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+ ), relationships as (
+  select distinct on(l.source_business_id,l.customer_id) l.source_business_id,l.customer_id,
+   public.hive_recipient_identity_key(l.customer_id) recipient_key,l.received_at,l.created_at,l.id
+  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
   cross join policy p
   where l.hive_id=p_hive_id and l.customer_id is not null
    and ((p.email_enabled and l.marketing_email_allowed) or (p.sms_enabled and l.marketing_sms_allowed))
-  order by l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+  order by l.source_business_id,l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+ ), unique_people as(
+  select recipient_key,bool_or(source_business_id=v_spotlight) spotlight_owned
+  from relationships group by recipient_key
  )
- select count(*) filter(where source_business_id=v_spotlight),
-        count(*) filter(where source_business_id<>v_spotlight),
-        count(*)
- into v_owned,v_incremental,v_total from eligible;
+ select count(*) filter(where spotlight_owned),count(*) filter(where not spotlight_owned),count(*)
+ into v_owned,v_incremental,v_total from unique_people;
 
  return jsonb_build_object(
   'launch_ready',true,'readiness',v_ready,
