@@ -761,7 +761,7 @@ begin
  select l.customer_id into v_customer_id from public.leads l where l.id=p_lead_id and l.hive_id=p_hive_id and l.source_business_id=p_source_business_id;
  if v_customer_id is null then raise exception 'Lead attribution context is invalid'; end if;
  if p_campaign_id is null and (not exists(select 1 from public.hive_members hm where hm.hive_id=p_hive_id and hm.business_id=p_source_business_id and hm.status='active') or not exists(select 1 from public.hive_members hm where hm.hive_id=p_hive_id and hm.business_id=p_receiving_business_id and hm.status='active')) then raise exception 'Businesses must be active members of the Hive'; end if;
- if p_offer_id is not null and not exists(select 1 from public.offers o where o.id=p_offer_id and o.business_id=p_receiving_business_id and o.status='active' and (o.hive_id is null or o.hive_id=p_hive_id) and (o.starts_at is null or o.starts_at<=now()) and (o.ends_at is null or o.ends_at>=now())) then raise exception 'Offer is not eligible'; end if;
+ if p_campaign_id is null and p_offer_id is not null and not exists(select 1 from public.offers o where o.id=p_offer_id and o.business_id=p_receiving_business_id and o.status='active' and (o.hive_id is null or o.hive_id=p_hive_id) and (o.starts_at is null or o.starts_at<=now()) and (o.ends_at is null or o.ends_at>=now())) then raise exception 'Offer is not eligible'; end if;
  if p_campaign_id is not null then
   if not exists(select 1 from public.hive_campaigns c where c.id=p_campaign_id and c.hive_id=p_hive_id and c.status in('active','completed')) then raise exception 'Campaign attribution context is invalid'; end if;
   -- Historical campaign attribution is governed by the activation snapshot, not
@@ -770,6 +770,7 @@ begin
   if not exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id and cm.business_id=p_source_business_id)
    or not exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id and cm.business_id=p_receiving_business_id)
   then raise exception 'Campaign attribution requires both businesses to be frozen campaign participants'; end if;
+  if p_offer_id is not null and not exists(select 1 from public.offers o join public.hive_campaigns c on c.id=p_campaign_id where o.id=p_offer_id and o.business_id=p_receiving_business_id and (o.hive_id is null or o.hive_id=p_hive_id) and (o.id=c.spotlight_offer_id or o.status='active')) then raise exception 'Offer is not valid for this campaign attribution'; end if;
   if not exists(
    select 1 from public.hive_campaign_recipients r
    join public.promotion_deliveries d on d.campaign_id=r.campaign_id and d.lead_id=r.lead_id
