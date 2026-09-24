@@ -551,7 +551,12 @@ grant execute on function public.member_promotion_exchange(integer) to authentic
 -- queued is only work that has not yet been claimed. Keep legacy keys while
 -- removing the misleading count(*) => queued behavior from the earlier migration.
 create or replace function public.hive_campaign_performance(p_campaign_id uuid)
-returns jsonb language sql security invoker set search_path='' stable as $function$
+returns jsonb language plpgsql security definer set search_path='' stable as $function$
+declare v_hive uuid;v_result jsonb;
+begin
+ select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;
+ if v_hive is null then raise exception 'Campaign not found'; end if;
+ if auth.role()<>'service_role' and not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
  with d as(
   select count(*)::bigint delivery_total,
    count(*) filter(where status='queued')::bigint queued,
@@ -566,17 +571,24 @@ returns jsonb language sql security invoker set search_path='' stable as $functi
    coalesce(sum(closed_value) filter(where status='won'),0)::numeric revenue
   from public.opportunities where campaign_id=p_campaign_id
  )
- select jsonb_build_object('contributing_members',coalesce(d.contributing_members,0),'delivery_total',coalesce(d.delivery_total,0),'queued',coalesce(d.queued,0),'sending',coalesce(d.sending,0),'sent',coalesce(d.sent,0),'delivered',coalesce(d.delivered,0),'failed',coalesce(d.failed,0),'opportunities',coalesce(o.opportunities,0),'wins',coalesce(o.wins,0),'attributed_revenue',coalesce(o.revenue,0)) from d cross join o
-$function$;
+ select jsonb_build_object('contributing_members',coalesce(d.contributing_members,0),'delivery_total',coalesce(d.delivery_total,0),'queued',coalesce(d.queued,0),'sending',coalesce(d.sending,0),'sent',coalesce(d.sent,0),'delivered',coalesce(d.delivered,0),'failed',coalesce(d.failed,0),'opportunities',coalesce(o.opportunities,0),'wins',coalesce(o.wins,0),'attributed_revenue',coalesce(o.revenue,0)) into v_result from d cross join o
+;
+ return v_result;
+end$function$;
 revoke all on function public.hive_campaign_performance(uuid) from public,anon;
-grant execute on function public.hive_campaign_performance(uuid) to authenticated;
+grant execute on function public.hive_campaign_performance(uuid) to authenticated,service_role;
 -- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 -- Normalize funnel reporting to the actual promotion_delivery_status domain.
 -- Provider bounce detail can be added later as a separate delivery-event field;
 -- it is not a valid delivery status today.
 create or replace function public.hive_campaign_funnel(p_campaign_id uuid)
-returns jsonb language sql security invoker set search_path='' stable as $function$
+returns jsonb language plpgsql security definer set search_path='' stable as $function$
+declare v_hive uuid;v_result jsonb;
+begin
+ select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;
+ if v_hive is null then raise exception 'Campaign not found'; end if;
+ if auth.role()<>'service_role' and not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
  with d as(
   select pd.id,pd.status,pd.lead_id from public.promotion_deliveries pd where pd.campaign_id=p_campaign_id
  ),e as(
@@ -602,11 +614,13 @@ returns jsonb language sql security invoker set search_path='' stable as $functi
   'delivery_total',del.delivery_total,'queued',del.queued,'sending',del.sending,'sent',del.sent,'delivered',del.delivered,'failed',del.failed,
   'hive_visits',coalesce(e.hive_visits,0),'member_engagements',coalesce(e.member_engagements,0),'offer_intent',coalesce(e.offer_intent,0),
   'opportunities',o.opportunities,'wins',o.wins,'attributed_revenue',o.attributed_revenue)
- from del cross join e cross join o left join r on true
-$function$;
+ into v_result from del cross join e cross join o left join r on true
+;
+ return v_result;
+end$function$;
 
 revoke all on function public.hive_campaign_funnel(uuid) from public,anon;
-grant execute on function public.hive_campaign_funnel(uuid) to authenticated;
+grant execute on function public.hive_campaign_funnel(uuid) to authenticated,service_role;
 -- Access is additionally scoped inside the function or by campaign RLS/visibility.
 
 
