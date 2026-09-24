@@ -26,6 +26,30 @@ $function$;
 revoke all on function public.hive_recipient_identity_key(uuid) from public,anon,authenticated;
 grant execute on function public.hive_recipient_identity_key(uuid) to service_role;
 
+-- Preserve member audience contribution independently from send deduplication.
+-- A shared homeowner can therefore count as a relationship for multiple members
+-- while the campaign still chooses a single delivery anchor for that person.
+create table if not exists public.hive_campaign_audience_contributions(
+ id uuid primary key default gen_random_uuid(),
+ campaign_id uuid not null references public.hive_campaigns(id) on delete cascade,
+ source_business_id uuid not null references public.businesses(id),
+ customer_id uuid not null references public.customers(id) on delete cascade,
+ recipient_key text not null,
+ email_eligible boolean not null default false,
+ sms_eligible boolean not null default false,
+ created_at timestamptz not null default now(),
+ unique(campaign_id,source_business_id,customer_id)
+);
+create index if not exists hive_campaign_contributions_recipient_idx on public.hive_campaign_audience_contributions(campaign_id,recipient_key);
+alter table public.hive_campaign_audience_contributions enable row level security;
+create policy "members can view campaign contribution summaries" on public.hive_campaign_audience_contributions
+for select to authenticated using(exists(
+ select 1 from public.hive_campaigns c join public.hive_members hm on hm.hive_id=c.hive_id
+ join public.business_users bu on bu.business_id=hm.business_id
+ where c.id=hive_campaign_audience_contributions.campaign_id and hm.status='active' and bu.user_id=(select auth.uid())
+));
+
+
 -- Preflight a Hive's first/next monthly campaign. This keeps launch readiness,
 -- Spotlight rotation and incremental network reach in one operator-facing view.
 create or replace function public.hive_campaign_preflight(p_hive_id uuid)
