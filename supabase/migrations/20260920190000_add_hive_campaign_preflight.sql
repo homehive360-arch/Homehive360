@@ -128,9 +128,15 @@ begin
   where (email_ok and (v_email and marketing_email_allowed)) or (not email_ok and sms_ok and (v_sms and marketing_sms_allowed))
   order by recipient_key,received_at desc nulls last,created_at desc,id desc
  )
- select p_campaign_id,hm.business_id,count(u.recipient_key),count(u.recipient_key) filter(where u.email_ok),count(u.recipient_key) filter(where u.sms_ok)
- from public.hive_members hm left join unique_people u on u.source_business_id=hm.business_id
- where hm.hive_id=v_hive and hm.status='active' group by hm.business_id
+ , audience_members as(
+  select cm.business_id from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id
+  union all
+  select hm.business_id from public.hive_members hm where hm.hive_id=v_hive and hm.status='active'
+   and not exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id)
+ )
+ select p_campaign_id,am.business_id,count(u.recipient_key),count(u.recipient_key) filter(where u.email_ok),count(u.recipient_key) filter(where u.sms_ok)
+ from audience_members am left join unique_people u on u.source_business_id=am.business_id
+ group by am.business_id
  on conflict(campaign_id,source_business_id) do update set eligible_customers=excluded.eligible_customers,email_eligible=excluded.email_eligible,sms_eligible=excluded.sms_eligible;
 end $function$;
 revoke all on function public.refresh_hive_campaign_audiences(uuid) from public,anon;
