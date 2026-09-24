@@ -50,6 +50,43 @@ for select to authenticated using(exists(
 ));
 
 
+-- Refresh the private contribution ledger without changing member-owned customer rows.
+create or replace function public.refresh_hive_campaign_audience_contributions(p_campaign_id uuid)
+returns bigint language plpgsql security definer set search_path='' as $function$
+declare v_hive uuid;v_email boolean;v_sms boolean;v_count bigint;
+begin
+ select hive_id,email_enabled,sms_enabled into v_hive,v_email,v_sms from public.hive_campaigns where id=p_campaign_id;
+ if v_hive is null then raise exception 'Campaign not found'; end if;
+ if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')) then raise exception 'Not authorized to manage this Hive'; end if;
+ delete from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id;
+ insert into public.hive_campaign_audience_contributions(campaign_id,source_business_id,customer_id,recipient_key,email_eligible,sms_eligible)
+ select p_campaign_id,x.source_business_id,x.customer_id,public.hive_recipient_identity_key(x.customer_id),x.email_eligible,x.sms_eligible
+ from(
+  select distinct on(l.source_business_id,l.customer_id) l.source_business_id,l.customer_id,
+   v_email and bool_or(l.marketing_email_allowed) over(partition by l.source_business_id,l.customer_id) email_eligible,
+   v_sms and bool_or(l.marketing_sms_allowed) over(partition by l.source_business_id,l.customer_id) sms_eligible
+  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
+  order by l.source_business_id,l.customer_id,l.received_at desc nulls last,l.created_at desc,l.id desc
+ ) x;
+ get diagnostics v_count=row_count; return v_count;
+end $function$;
+revoke all on function public.refresh_hive_campaign_audience_contributions(uuid) from public,anon;
+grant execute on function public.refresh_hive_campaign_audience_contributions(uuid) to authenticated;
+
+create or replace function public.hive_campaign_contribution_summary(p_campaign_id uuid)
+returns jsonb language sql security invoker set search_path='' stable as $function$
+ with a as(
+  select source_business_id,count(*)::bigint contributed_relationships,
+   count(*) filter(where email_eligible)::bigint email_eligible_relationships,
+   count(*) filter(where sms_eligible)::bigint sms_eligible_relationships
+  from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id group by source_business_id
+ ),u as(select count(distinct recipient_key)::bigint unique_recipients from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id)
+ select jsonb_build_object('unique_recipients',coalesce((select unique_recipients from u),0),'member_contributions',coalesce(jsonb_agg(jsonb_build_object('source_business_id',a.source_business_id,'contributed_relationships',a.contributed_relationships,'email_eligible_relationships',a.email_eligible_relationships,'sms_eligible_relationships',a.sms_eligible_relationships) order by a.source_business_id),'[]'::jsonb)) from a
+$function$;
+revoke all on function public.hive_campaign_contribution_summary(uuid) from public,anon;
+grant execute on function public.hive_campaign_contribution_summary(uuid) to authenticated;
+
 -- Preflight a Hive's first/next monthly campaign. This keeps launch readiness,
 -- Spotlight rotation and incremental network reach in one operator-facing view.
 create or replace function public.hive_campaign_preflight(p_hive_id uuid)
