@@ -264,7 +264,7 @@ end
 $function$;
 
 revoke all on function public.mark_hive_campaign_audience_frozen(uuid) from public,anon,authenticated;
-grant execute on function public.mark_hive_campaign_audience_frozen(uuid) to service_role;
+grant execute on function public.mark_hive_campaign_audience_frozen(uuid) to postgres,service_role;
 
 
 create or replace function public.snapshot_hive_campaign_recipients(p_campaign_id uuid)
@@ -301,7 +301,7 @@ begin
 end $function$;
 
 revoke all on function public.snapshot_hive_campaign_recipients(uuid) from public,anon,authenticated;
-grant execute on function public.snapshot_hive_campaign_recipients(uuid) to service_role;
+grant execute on function public.snapshot_hive_campaign_recipients(uuid) to postgres,service_role;
 
 
 -- Keep aggregate reach reporting aligned with the immutable recipient snapshot.
@@ -477,7 +477,7 @@ begin
 end $function$;
 
 revoke all on function public.assert_hive_campaign_dispatch_ready(uuid) from public,anon,authenticated;
-grant execute on function public.assert_hive_campaign_dispatch_ready(uuid) to service_role;
+grant execute on function public.assert_hive_campaign_dispatch_ready(uuid) to postgres,service_role;
 
 
 -- Final campaign queue guard: deliveries must come from the immutable snapshot,
@@ -555,7 +555,7 @@ begin
 end $function$;
 
 revoke all on function public.campaign_delivery_eligibility(uuid,uuid,text) from public,anon,authenticated;
-grant execute on function public.campaign_delivery_eligibility(uuid,uuid,text) to service_role;
+grant execute on function public.campaign_delivery_eligibility(uuid,uuid,text) to postgres,service_role;
 
 
 -- Existing members may predate authoritative category seats. Surface that gap
