@@ -12,6 +12,20 @@ $function$;
 revoke all on function public.next_hive_spotlight_member(uuid) from public,anon;
 grant execute on function public.next_hive_spotlight_member(uuid) to authenticated;
 
+-- Privacy-safe cross-member recipient key. Customer rows remain member-owned; this
+-- key is used only to prevent duplicate monthly sends when the same person exists
+-- in more than one member CRM. No raw email/phone is exposed across businesses.
+create or replace function public.hive_recipient_identity_key(p_customer_id uuid)
+returns text language sql security definer set search_path='' stable as $function$
+ select case
+  when nullif(lower(trim(c.email)),'') is not null then encode(digest('email:'||lower(trim(c.email)),'sha256'),'hex')
+  when nullif(regexp_replace(coalesce(c.phone,''),'\\D','','g'),'') is not null then encode(digest('phone:'||regexp_replace(c.phone,'\\D','','g'),'sha256'),'hex')
+  else encode(digest('customer:'||c.id::text,'sha256'),'hex')
+ end from public.customers c where c.id=p_customer_id
+$function$;
+revoke all on function public.hive_recipient_identity_key(uuid) from public,anon,authenticated;
+grant execute on function public.hive_recipient_identity_key(uuid) to service_role;
+
 -- Preflight a Hive's first/next monthly campaign. This keeps launch readiness,
 -- Spotlight rotation and incremental network reach in one operator-facing view.
 create or replace function public.hive_campaign_preflight(p_hive_id uuid)
