@@ -436,6 +436,9 @@ begin
  end if;
  -- Freeze the relationship-contribution evidence in the same transaction as the
  -- recipient snapshot. The helper is idempotent once audience_frozen_at is set.
+ -- The participant snapshot must already exist. Recipient freezing is deliberately
+ -- downstream of membership freezing so the two historical ledgers cannot diverge.
+ if not exists(select 1 from public.hive_campaign_members cm where cm.campaign_id=p_campaign_id) then raise exception 'Campaign participant snapshot is required before recipient freeze'; end if;
  perform public.refresh_hive_campaign_audience_contributions(p_campaign_id);
  insert into public.hive_campaign_recipients(campaign_id,lead_id,source_business_id,customer_id,email_eligible,sms_eligible,recipient_key)
  with candidates as(
