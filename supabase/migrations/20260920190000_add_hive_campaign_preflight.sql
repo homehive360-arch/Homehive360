@@ -443,7 +443,7 @@ begin
    public.hive_recipient_identity_key(l.customer_id) recipient_key,
    (v_email and l.marketing_email_allowed) row_email_eligible,
    (v_sms and l.marketing_sms_allowed) row_sms_eligible
-  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  from public.leads l join public.hive_campaign_members cm on cm.campaign_id=p_campaign_id and cm.business_id=l.source_business_id
   where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
  ), aggregate_eligibility as(
   select recipient_key,bool_or(row_email_eligible) email_eligible,bool_or(row_sms_eligible) sms_eligible from candidates group by recipient_key
