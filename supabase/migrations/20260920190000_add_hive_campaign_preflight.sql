@@ -164,6 +164,11 @@ end $function$;
 revoke all on function public.snapshot_hive_campaign_members(uuid) from public,anon,authenticated;
 grant execute on function public.snapshot_hive_campaign_members(uuid) to postgres,service_role;
 
+-- Historical participant snapshot is internal campaign evidence. Keep raw membership
+-- rows private; expose only aggregate reporting through authorized RPCs.
+revoke all on table public.hive_campaign_members from public,anon,authenticated;
+grant select,insert,update,delete on table public.hive_campaign_members to service_role;
+
 -- Final scheduled-activation override: automated launch enforces the same
 -- authoritative seat, offer, and Hive launch-readiness gates as manual activation.
 create or replace function public.activate_due_hive_campaigns(p_limit integer default 25)
