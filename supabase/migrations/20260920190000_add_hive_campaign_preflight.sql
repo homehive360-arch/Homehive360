@@ -574,7 +574,7 @@ begin
  select jsonb_build_object('contributing_members',coalesce(d.contributing_members,0),'delivery_total',coalesce(d.delivery_total,0),'queued',coalesce(d.queued,0),'sending',coalesce(d.sending,0),'sent',coalesce(d.sent,0),'delivered',coalesce(d.delivered,0),'failed',coalesce(d.failed,0),'opportunities',coalesce(o.opportunities,0),'wins',coalesce(o.wins,0),'attributed_revenue',coalesce(o.revenue,0)) into v_result from d cross join o
 ;
  return v_result;
-end$function$;
+end $function$;
 revoke all on function public.hive_campaign_performance(uuid) from public,anon;
 grant execute on function public.hive_campaign_performance(uuid) to authenticated,service_role;
 -- Access is additionally scoped inside the function or by campaign RLS/visibility.
@@ -617,7 +617,7 @@ begin
  into v_result from del cross join e cross join o left join r on true
 ;
  return v_result;
-end$function$;
+end $function$;
 
 revoke all on function public.hive_campaign_funnel(uuid) from public,anon;
 grant execute on function public.hive_campaign_funnel(uuid) to authenticated,service_role;
