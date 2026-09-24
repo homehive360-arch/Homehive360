@@ -57,6 +57,12 @@ begin
  select hive_id,email_enabled,sms_enabled into v_hive,v_email,v_sms from public.hive_campaigns where id=p_campaign_id;
  if v_hive is null then raise exception 'Campaign not found'; end if;
  if auth.role()<>'service_role' and not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')) then raise exception 'Not authorized to manage this Hive'; end if;
+ -- Contribution ownership is part of the frozen campaign evidence. Never rebuild it
+ -- after activation, even if CRM records or member relationships later change.
+ if exists(select 1 from public.hive_campaigns where id=p_campaign_id and audience_frozen_at is not null) then
+  select count(*) into v_count from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id;
+  return v_count;
+ end if;
  delete from public.hive_campaign_audience_contributions where campaign_id=p_campaign_id;
  insert into public.hive_campaign_audience_contributions(campaign_id,source_business_id,customer_id,recipient_key,email_eligible,sms_eligible)
  select p_campaign_id,x.source_business_id,x.customer_id,public.hive_recipient_identity_key(x.customer_id),x.email_eligible,x.sms_eligible
