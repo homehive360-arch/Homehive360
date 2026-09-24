@@ -397,7 +397,7 @@ grant execute on function public.promotion_funnel_summary(integer) to authentica
 -- campaign audience relationships, not raw lead ingestion volume.
 create or replace function public.member_value_scorecard(p_days integer default 30)
 returns table(id uuid,name text,contributed bigint,received bigint,sourced bigint,pipeline numeric,revenue numeric,wins bigint)
-language sql security invoker set search_path='' stable as $function$
+language sql security definer set search_path='' stable as $function$
  with cutoff as(select now()-(greatest(1,least(coalesce(p_days,30),365))||' days')::interval ts),
  visible as(select b.id,b.name from public.businesses b where exists(select 1 from public.business_users bu where bu.business_id=b.id and bu.user_id=(select auth.uid()))),
  contribution as(select ac.source_business_id id,count(*)::bigint contributed from public.hive_campaign_audience_contributions ac join public.hive_campaigns hc on hc.id=ac.campaign_id,cutoff c where hc.created_at>=c.ts group by ac.source_business_id),
@@ -412,7 +412,7 @@ grant execute on function public.member_value_scorecard(integer) to authenticate
 -- was an active participant, not clicks. Clicks remain engagement metrics.
 create or replace function public.member_promotion_exchange(p_days integer default 30)
 returns table(business_id uuid,business_name text,audience_contributed bigint,promotions_contributed bigint,exposure_received bigint,member_engagements bigint,offer_intent bigint,opportunities_received bigint,wins bigint,attributed_revenue numeric)
-language sql security invoker set search_path='' stable as $function$
+language sql security definer set search_path='' stable as $function$
  with cutoff as(select now()-(greatest(1,least(coalesce(p_days,30),365))||' days')::interval ts),
  visible as(select distinct b.id,b.name from public.businesses b join public.business_users bu on bu.business_id=b.id where bu.user_id=(select auth.uid())),
  audience as(select ac.source_business_id id,count(*)::bigint n from public.hive_campaign_audience_contributions ac join public.hive_campaigns hc on hc.id=ac.campaign_id,cutoff c where hc.created_at>=c.ts group by ac.source_business_id),
