@@ -128,7 +128,7 @@ begin
  on conflict(campaign_id,source_business_id) do update set eligible_customers=excluded.eligible_customers,email_eligible=excluded.email_eligible,sms_eligible=excluded.sms_eligible;
 end $function$;
 revoke all on function public.refresh_hive_campaign_audiences(uuid) from public,anon;
-grant execute on function public.refresh_hive_campaign_audiences(uuid) to authenticated;
+grant execute on function public.refresh_hive_campaign_audiences(uuid) to authenticated,service_role,postgres;
 
 
 -- Final scheduled-activation override: automated launch enforces the same
