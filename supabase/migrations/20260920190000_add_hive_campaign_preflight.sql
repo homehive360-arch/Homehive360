@@ -131,6 +131,39 @@ revoke all on function public.refresh_hive_campaign_audiences(uuid) from public,
 grant execute on function public.refresh_hive_campaign_audiences(uuid) to authenticated,service_role,postgres;
 
 
+-- Freeze the participating Hive membership with the audience. Historical exposure
+-- must not change when businesses later join or leave the Hive.
+create table if not exists public.hive_campaign_members(
+ campaign_id uuid not null references public.hive_campaigns(id) on delete cascade,
+ business_id uuid not null references public.businesses(id),
+ category text not null,
+ is_spotlight boolean not null default false,
+ created_at timestamptz not null default now(),
+ primary key(campaign_id,business_id)
+);
+alter table public.hive_campaign_members enable row level security;
+revoke all on table public.hive_campaign_members from public,anon,authenticated;
+grant select,insert,update,delete on table public.hive_campaign_members to service_role;
+
+create or replace function public.snapshot_hive_campaign_members(p_campaign_id uuid)
+returns integer language plpgsql security definer set search_path='' as $function$
+declare v_hive uuid;v_spotlight uuid;v_frozen timestamptz;v_count integer;
+begin
+ select hive_id,spotlight_business_id,audience_frozen_at into v_hive,v_spotlight,v_frozen from public.hive_campaigns where id=p_campaign_id for update;
+ if v_hive is null then raise exception 'Campaign not found'; end if;
+ select count(*)::int into v_count from public.hive_campaign_members where campaign_id=p_campaign_id;
+ if v_count>0 or v_frozen is not null then return v_count; end if;
+ insert into public.hive_campaign_members(campaign_id,business_id,category,is_spotlight)
+ select p_campaign_id,hm.business_id,hs.category,hm.business_id=v_spotlight
+ from public.hive_members hm join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active'
+ where hm.hive_id=v_hive and hm.status='active'
+ on conflict(campaign_id,business_id) do nothing;
+ get diagnostics v_count=row_count;
+ return v_count;
+end $function$;
+revoke all on function public.snapshot_hive_campaign_members(uuid) from public,anon,authenticated;
+grant execute on function public.snapshot_hive_campaign_members(uuid) to postgres,service_role;
+
 -- Final scheduled-activation override: automated launch enforces the same
 -- authoritative seat, offer, and Hive launch-readiness gates as manual activation.
 create or replace function public.activate_due_hive_campaigns(p_limit integer default 25)
@@ -183,7 +216,7 @@ begin
    if not coalesce((v_ready->>'launch_ready')::boolean,false) then raise exception 'Hive is not launch ready'; end if;
   end if;
   perform public.refresh_hive_campaign_audiences(p_campaign_id);
-  if p_status='active' then perform public.snapshot_hive_campaign_recipients(p_campaign_id); end if;
+  if p_status='active' then\n   perform public.snapshot_hive_campaign_members(p_campaign_id);\n   perform public.snapshot_hive_campaign_recipients(p_campaign_id);\n  end if;
  end if;
  update public.hive_campaigns set status=p_status,scheduled_at=case when p_status in('scheduled','active') then v_launch_at else scheduled_at end,updated_at=now() where id=p_campaign_id returning * into v;
  return v;
