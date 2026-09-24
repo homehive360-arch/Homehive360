@@ -385,9 +385,12 @@ begin
     and r.source_business_id=p_source_business_id and d.status in('sent','delivered')
   ) then raise exception 'Campaign attribution requires a dispatched frozen-audience delivery'; end if;
  end if;
- select id into v_id from public.opportunities where lead_id=p_lead_id and receiving_business_id=p_receiving_business_id order by created_at limit 1;
+ select id into v_id from public.opportunities
+ where lead_id=p_lead_id and receiving_business_id=p_receiving_business_id
+  and campaign_id is not distinct from p_campaign_id
+ order by created_at limit 1;
  if v_id is not null then
-  update public.opportunities set campaign_id=coalesce(campaign_id,p_campaign_id),offer_id=coalesce(offer_id,p_offer_id),updated_at=now() where id=v_id;
+  update public.opportunities set offer_id=coalesce(offer_id,p_offer_id),updated_at=now() where id=v_id;
   return v_id;
  end if;
  insert into public.opportunities(lead_id,hive_id,source_business_id,receiving_business_id,customer_id,offer_id,campaign_id,status)
