@@ -206,6 +206,7 @@ begin
    update public.hive_campaigns set status='draft',scheduled_at=null,updated_at=now() where id=c.id;continue;
   end if;
   perform public.refresh_hive_campaign_audiences(c.id);
+  perform public.snapshot_hive_campaign_members(c.id);
   perform public.snapshot_hive_campaign_recipients(c.id);
   update public.hive_campaigns set status='active',updated_at=now() where id=c.id;
   campaign_id:=c.id;return next;
@@ -239,7 +240,10 @@ begin
    if not coalesce((v_ready->>'launch_ready')::boolean,false) then raise exception 'Hive is not launch ready'; end if;
   end if;
   perform public.refresh_hive_campaign_audiences(p_campaign_id);
-  if p_status='active' then\n   perform public.snapshot_hive_campaign_members(p_campaign_id);\n   perform public.snapshot_hive_campaign_recipients(p_campaign_id);\n  end if;
+  if p_status='active' then
+   perform public.snapshot_hive_campaign_members(p_campaign_id);
+   perform public.snapshot_hive_campaign_recipients(p_campaign_id);
+  end if;
  end if;
  update public.hive_campaigns set status=p_status,scheduled_at=case when p_status in('scheduled','active') then v_launch_at else scheduled_at end,updated_at=now() where id=p_campaign_id returning * into v;
  return v;
