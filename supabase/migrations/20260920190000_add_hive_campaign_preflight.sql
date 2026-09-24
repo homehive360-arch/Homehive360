@@ -318,7 +318,12 @@ grant execute on function public.snapshot_hive_campaign_recipients(uuid) to post
 -- Once frozen, reach is derived from the actual campaign recipients rather than
 -- mutable lead records or pre-launch projections.
 create or replace function public.hive_campaign_reach(p_campaign_id uuid)
-returns jsonb language sql security invoker set search_path='' stable as $function$
+returns jsonb language plpgsql security definer set search_path='' stable as $function$
+declare v_hive uuid;v_result jsonb;
+begin
+ select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;
+ if v_hive is null then raise exception 'Campaign not found'; end if;
+ if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
  with c as(
   select spotlight_business_id,audience_frozen_at from public.hive_campaigns where id=p_campaign_id
  ), contribution_people as(
@@ -344,7 +349,9 @@ returns jsonb language sql security invoker set search_path='' stable as $functi
  )
  select jsonb_build_object('owned_reach',owned_reach,'incremental_hive_reach',incremental_hive_reach,
   'total_reach',total_reach,'email_reach',email_reach,'sms_reach',sms_reach,
-  'audience_frozen',(select audience_frozen_at is not null from c)) from totals
+  'audience_frozen',(select audience_frozen_at is not null from c)) into v_result from totals;
+ return v_result;
+end
 $function$;
 
 revoke all on function public.hive_campaign_reach(uuid) from public,anon;
