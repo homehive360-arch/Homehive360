@@ -131,6 +131,39 @@ revoke all on function public.refresh_hive_campaign_audiences(uuid) from public,
 grant execute on function public.refresh_hive_campaign_audiences(uuid) to authenticated;
 
 
+-- Final lifecycle override: require authoritative Spotlight seat and launch-ready Hive
+-- at activation time. Scheduling may happen in advance, but activation is the
+-- point where the network must still satisfy launch invariants.
+create or replace function public.set_hive_campaign_status(p_campaign_id uuid,p_status text,p_scheduled_at timestamptz default null)
+returns public.hive_campaigns language plpgsql security definer set search_path='' as $function$
+declare v public.hive_campaigns;v_launch_at timestamptz;v_ready jsonb;
+begin
+ select * into v from public.hive_campaigns where id=p_campaign_id for update;
+ if v.id is null then raise exception 'Campaign not found'; end if;
+ if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v.hive_id and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')) then raise exception 'Not authorized to manage this Hive'; end if;
+ if p_status not in('scheduled','active','completed','cancelled') then raise exception 'Invalid campaign status'; end if;
+ if v.status in('completed','cancelled') then raise exception 'Completed or cancelled campaigns are terminal'; end if;
+ if v.status='draft' and p_status not in('scheduled','active','cancelled') then raise exception 'Invalid transition from draft'; end if;
+ if v.status='scheduled' and p_status not in('active','cancelled') then raise exception 'Invalid transition from scheduled'; end if;
+ if v.status='active' and p_status not in('completed','cancelled') then raise exception 'Invalid transition from active'; end if;
+ v_launch_at:=case when p_status='scheduled' then p_scheduled_at when p_status='active' then now() else v.scheduled_at end;
+ if p_status='scheduled' and (v_launch_at is null or v_launch_at<=now()) then raise exception 'Scheduled campaigns require a future launch time'; end if;
+ if p_status in('scheduled','active') then
+  if not exists(select 1 from public.hive_members hm join public.hive_member_seats hs on hs.hive_id=hm.hive_id and hs.business_id=hm.business_id and hs.status='active' where hm.hive_id=v.hive_id and hm.business_id=v.spotlight_business_id and hm.status='active') then raise exception 'Spotlight member is not active with an authoritative category seat'; end if;
+  if v.spotlight_offer_id is not null and not exists(select 1 from public.offers o where o.id=v.spotlight_offer_id and o.business_id=v.spotlight_business_id and o.status='active' and (o.hive_id is null or o.hive_id=v.hive_id) and (o.starts_at is null or o.starts_at<=v_launch_at) and (o.ends_at is null or o.ends_at>=v_launch_at)) then raise exception 'Spotlight offer is not valid at launch time'; end if;
+  if p_status='active' then
+   select public.hive_launch_readiness(v.hive_id) into v_ready;
+   if not coalesce((v_ready->>'launch_ready')::boolean,false) then raise exception 'Hive is not launch ready'; end if;
+  end if;
+  perform public.refresh_hive_campaign_audiences(p_campaign_id);
+  if p_status='active' then perform public.snapshot_hive_campaign_recipients(p_campaign_id); end if;
+ end if;
+ update public.hive_campaigns set status=p_status,scheduled_at=case when p_status in('scheduled','active') then v_launch_at else scheduled_at end,updated_at=now() where id=p_campaign_id returning * into v;
+ return v;
+end $function$;
+revoke all on function public.set_hive_campaign_status(uuid,text,timestamptz) from public,anon;
+grant execute on function public.set_hive_campaign_status(uuid,text,timestamptz) to authenticated;
+
 -- Final planner override: pre-campaign reach uses privacy-safe recipient identity
 -- and relationship ownership, matching preflight and frozen campaign reporting.
 create or replace function public.hive_campaign_planner(p_hive_id uuid)
