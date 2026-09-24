@@ -87,6 +87,36 @@ $function$;
 revoke all on function public.hive_campaign_contribution_summary(uuid) from public,anon;
 grant execute on function public.hive_campaign_contribution_summary(uuid) to authenticated;
 
+-- Final projected-audience refresh: assign each unique person to one deterministic
+-- delivery source for reach accounting while preserving every member relationship
+-- separately in hive_campaign_audience_contributions.
+create or replace function public.refresh_hive_campaign_audiences(p_campaign_id uuid)
+returns void language plpgsql security definer set search_path='' as $function$
+declare v_hive uuid;v_email boolean;v_sms boolean;
+begin
+ select hive_id,email_enabled,sms_enabled into v_hive,v_email,v_sms from public.hive_campaigns where id=p_campaign_id;
+ if v_hive is null then raise exception 'Campaign not found'; end if;
+ if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid()) and bu.role in('owner','admin')) then raise exception 'Not authorized to manage this Hive'; end if;
+ perform public.refresh_hive_campaign_audience_contributions(p_campaign_id);
+ insert into public.hive_campaign_audiences(campaign_id,source_business_id,eligible_customers,email_eligible,sms_eligible)
+ with candidates as(
+  select l.source_business_id,l.customer_id,public.hive_recipient_identity_key(l.customer_id) recipient_key,l.received_at,l.created_at,l.id,
+   bool_or(v_email and l.marketing_email_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) email_ok,
+   bool_or(v_sms and l.marketing_sms_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) sms_ok
+  from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
+  where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
+ ), unique_people as(
+  select distinct on(recipient_key) recipient_key,source_business_id,email_ok,sms_ok from candidates
+  order by recipient_key,received_at desc nulls last,created_at desc,id desc
+ )
+ select p_campaign_id,hm.business_id,count(u.recipient_key),count(u.recipient_key) filter(where u.email_ok),count(u.recipient_key) filter(where u.sms_ok)
+ from public.hive_members hm left join unique_people u on u.source_business_id=hm.business_id
+ where hm.hive_id=v_hive and hm.status='active' group by hm.business_id
+ on conflict(campaign_id,source_business_id) do update set eligible_customers=excluded.eligible_customers,email_eligible=excluded.email_eligible,sms_eligible=excluded.sms_eligible;
+end $function$;
+revoke all on function public.refresh_hive_campaign_audiences(uuid) from public,anon;
+grant execute on function public.refresh_hive_campaign_audiences(uuid) to authenticated;
+
 -- Final launch-readiness override: use privacy-safe unique people rather than
 -- summing member-owned customer rows. Member relationships remain intact; this
 -- gate measures the audience the network can actually contact without duplicates.
