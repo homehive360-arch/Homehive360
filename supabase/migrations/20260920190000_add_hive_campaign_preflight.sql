@@ -71,7 +71,7 @@ begin
  get diagnostics v_count=row_count; return v_count;
 end $function$;
 revoke all on function public.refresh_hive_campaign_audience_contributions(uuid) from public,anon;
-grant execute on function public.refresh_hive_campaign_audience_contributions(uuid) to authenticated;
+grant execute on function public.refresh_hive_campaign_audience_contributions(uuid) to postgres,service_role;
 
 create or replace function public.hive_campaign_contribution_summary(p_campaign_id uuid)
 returns jsonb language plpgsql security definer set search_path='' stable as $function$
