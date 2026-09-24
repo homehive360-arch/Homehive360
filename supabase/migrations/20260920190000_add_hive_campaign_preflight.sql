@@ -15,7 +15,7 @@ language sql security invoker set search_path='' stable as $function$
  group by b.id,b.name order by max(c.campaign_month) asc nulls first,b.name limit 1
 $function$;
 revoke all on function public.next_hive_spotlight_member(uuid) from public,anon;
-grant execute on function public.next_hive_spotlight_member(uuid) to authenticated;
+grant execute on function public.next_hive_spotlight_member(uuid) to authenticated,service_role,postgres;
 
 -- Privacy-safe cross-member recipient key. Customer rows remain member-owned; this
 -- key is used only to prevent duplicate monthly sends when the same person exists
@@ -335,8 +335,8 @@ grant execute on function public.create_launch_ready_monthly_hive_campaign(uuid,
 
 -- External authenticated callers must use the launch-readiness gate. The lower-level
 -- creator remains available only to the service role for controlled internal work.
-revoke all on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) from authenticated;
-grant execute on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) to service_role;
+revoke all on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.create_monthly_hive_campaign(uuid,date,uuid,uuid,text) to service_role,postgres;
 
 
 -- A campaign audience is immutable once activation begins, including the valid
