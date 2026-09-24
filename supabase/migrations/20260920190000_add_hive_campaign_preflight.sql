@@ -94,13 +94,14 @@ begin
  perform public.refresh_hive_campaign_audience_contributions(p_campaign_id);
  insert into public.hive_campaign_audiences(campaign_id,source_business_id,eligible_customers,email_eligible,sms_eligible)
  with candidates as(
-  select l.source_business_id,l.customer_id,public.hive_recipient_identity_key(l.customer_id) recipient_key,l.received_at,l.created_at,l.id,
+  select l.source_business_id,l.customer_id,l.marketing_email_allowed,l.marketing_sms_allowed,public.hive_recipient_identity_key(l.customer_id) recipient_key,l.received_at,l.created_at,l.id,
    bool_or(v_email and l.marketing_email_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) email_ok,
    bool_or(v_sms and l.marketing_sms_allowed) over(partition by public.hive_recipient_identity_key(l.customer_id)) sms_ok
   from public.leads l join public.hive_members hm on hm.hive_id=l.hive_id and hm.business_id=l.source_business_id and hm.status='active'
   where l.hive_id=v_hive and l.customer_id is not null and ((v_email and l.marketing_email_allowed) or (v_sms and l.marketing_sms_allowed))
  ), unique_people as(
   select distinct on(recipient_key) recipient_key,source_business_id,email_ok,sms_ok from candidates
+  where (email_ok and (v_email and marketing_email_allowed)) or (not email_ok and sms_ok and (v_sms and marketing_sms_allowed))
   order by recipient_key,received_at desc nulls last,created_at desc,id desc
  )
  select p_campaign_id,hm.business_id,count(u.recipient_key),count(u.recipient_key) filter(where u.email_ok),count(u.recipient_key) filter(where u.sms_ok)
