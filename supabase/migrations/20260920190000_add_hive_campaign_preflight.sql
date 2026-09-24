@@ -412,7 +412,7 @@ declare v_hive uuid;v_result jsonb;
 begin
  select hive_id into v_hive from public.hive_campaigns where id=p_campaign_id;
  if v_hive is null then raise exception 'Campaign not found'; end if;
- if not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
+ if auth.role()<>'service_role' and not exists(select 1 from public.hive_members hm join public.business_users bu on bu.business_id=hm.business_id where hm.hive_id=v_hive and hm.status='active' and bu.user_id=(select auth.uid())) then raise exception 'Not authorized to view this Hive'; end if;
  with c as(
   select spotlight_business_id,audience_frozen_at from public.hive_campaigns where id=p_campaign_id
  ), contribution_people as(
