@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/v1/campaigns/run-scheduled",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/v1/campaigns/process-deliveries",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

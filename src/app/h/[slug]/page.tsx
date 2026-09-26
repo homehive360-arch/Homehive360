@@ -44,9 +44,22 @@ export default async function HivePage({ params, searchParams }: PageProps) {
     .order('display_order');
 
   const activeMembers = (members || []).filter((member: any) => member.businesses);
-  const source = ref
+  const refSource = ref
     ? activeMembers.map((member: any) => member.businesses).find((business: any) => business.slug === ref)
     : null;
+
+  let campaign:any=null;
+  if(pid){
+    const {data}=await db.rpc('public_hive_campaign_context',{p_hive_id:hive.id,p_tracking_token:pid});
+    campaign=Array.isArray(data)?data[0]:data;
+  }
+  const trustedSource=campaign?.source_business_id?activeMembers.map((member:any)=>member.businesses).find((business:any)=>business.id===campaign.source_business_id):null;
+  // A tracked campaign delivery is authoritative. `ref` remains a convenience
+  // for organic/untracked Hive links only and cannot override campaign attribution.
+  const source=pid?trustedSource:refSource;
+  const visibleMembers = activeMembers;
+  const spotlightBusiness=campaign?.spotlight_business_id?activeMembers.map((member:any)=>member.businesses).find((business:any)=>business.id===campaign.spotlight_business_id):null;
+  const spotlightOffer=spotlightBusiness?.offers?.find((offer:any)=>offer.id===campaign?.spotlight_offer_id)||null;
 
   return (
     <main style={{ maxWidth: 1180, margin: '0 auto', padding: '52px 22px' }}>
@@ -61,18 +74,28 @@ export default async function HivePage({ params, searchParams }: PageProps) {
 
       {source ? (
         <div className="card" style={{ marginTop: 24, padding: 18 }}>
-          <b>Referred by {source.name}</b>
-          <div className="label" style={{ marginTop: 5 }}>Explore trusted businesses in the same local Home Hive network.</div>
+          <b>Shared with you by {source.name}</b>
+          <div className="label" style={{ marginTop: 5 }}>Explore complementary local businesses promoted through the same Home Hive network. Your relationship remains with the business you already know.</div>
         </div>
       ) : null}
 
+      {spotlightBusiness ? <section className="card" style={{marginTop:24,padding:24,borderWidth:2}}>
+        <div className="eyebrow">THIS MONTH'S HOME HIVE SPOTLIGHT</div>
+        <div style={{display:'flex',gap:20,alignItems:'center',flexWrap:'wrap'}}>
+          {spotlightBusiness.logo_url?<img src={spotlightBusiness.logo_url} alt={spotlightBusiness.name+' logo'} style={{maxWidth:180,maxHeight:72,objectFit:'contain'}}/>:null}
+          <div style={{flex:1,minWidth:260}}><h2 style={{marginBottom:6}}>{spotlightBusiness.name}</h2><p className="sub">{spotlightBusiness.description||'A featured member of your trusted local Home Hive.'}</p>
+          {spotlightOffer?<div className="step"><span className="label">EXCLUSIVE MONTHLY OFFER</span><b style={{fontSize:20}}>{spotlightOffer.title}</b>{spotlightOffer.description?<p className="label">{spotlightOffer.description}</p>:null}</div>:null}
+          {spotlightOffer?.cta_url?<TrackedLink className="btn" href={outboundUrl(spotlightOffer.cta_url,slug,spotlightBusiness.slug,source?.slug)} hiveSlug={slug} businessSlug={spotlightBusiness.slug} sourceSlug={source?.slug} pid={pid} offerId={spotlightOffer.id} eventType="offer.clicked">{spotlightOffer.cta_label||'View Spotlight Offer'}</TrackedLink>:null}</div>
+        </div>
+      </section>:null}
+
       <div className="sectionHead" style={{ marginTop: 34 }}>
         <h2>Meet your Home Hive</h2>
-        <span className="badge">{activeMembers.length} MEMBERS · LOCAL · CONNECTED</span>
+        <span className="badge">{visibleMembers.length} MEMBERS · LOCAL · CONNECTED</span>
       </div>
 
       <div className="grid">
-        {activeMembers.map((member: any) => {
+        {visibleMembers.map((member: any) => {
           const business = member.businesses;
           const service = business.services?.find((item: any) => item.category) || business.services?.[0];
           const offer = business.offers?.find((item: any) => item.status === 'active' && (!item.starts_at || new Date(item.starts_at) <= new Date()) && (!item.ends_at || new Date(item.ends_at) >= new Date()));
@@ -108,7 +131,7 @@ export default async function HivePage({ params, searchParams }: PageProps) {
         })}
       </div>
 
-      {!activeMembers.length ? (
+      {!visibleMembers.length ? (
         <section className="section card"><h2>This Hive is getting ready.</h2><p className="sub">Member businesses will appear here as they join the network.</p></section>
       ) : null}
 

@@ -1,14 +1,8 @@
-export type PromotionMessageInput={firstName:string;sourceBusinessName:string;hiveSlug:string;sourceBusinessSlug:string;marketName?:string|null;appOrigin?:string};
+export type PromotionMessageInput={firstName:string;sourceBusinessName:string;hiveSlug:string;sourceBusinessSlug:string;marketName?:string|null;appOrigin?:string;spotlightBusinessName?:string|null;spotlightOfferTitle?:string|null};
 export function buildPromotionMessage(input:PromotionMessageInput){
- const configured=(input.appOrigin||'').trim();
- if(!configured)throw new Error('NEXT_PUBLIC_APP_URL is required to build promotion links');
+ const configured=(input.appOrigin||'').trim();if(!configured)throw new Error('NEXT_PUBLIC_APP_URL is required to build promotion links');
  let origin:string;try{const u=new URL(configured);if(!['http:','https:'].includes(u.protocol))throw new Error();origin=u.origin;}catch{throw new Error('NEXT_PUBLIC_APP_URL must be an absolute http(s) URL');}
- const hiveUrl=origin+'/h/'+encodeURIComponent(input.hiveSlug)+'?ref='+encodeURIComponent(input.sourceBusinessSlug);
- const market=input.marketName?(' in '+input.marketName):'';
- return {
-  hiveUrl,
-  emailSubject:'Trusted local home services from '+input.sourceBusinessName,
-  emailText:'Hi '+input.firstName+', thanks for choosing '+input.sourceBusinessName+'. As a customer, you can explore their trusted Home Hive network'+market+': '+hiveUrl,
-  smsText:'Hi '+input.firstName+' — '+input.sourceBusinessName+' is part of a trusted local Home Hive. Explore their recommended home-service network: '+hiveUrl
- };
+ const hiveUrl=origin+'/h/'+encodeURIComponent(input.hiveSlug)+'?ref='+encodeURIComponent(input.sourceBusinessSlug),market=input.marketName?(' in '+input.marketName):'';
+ const spotlight=input.spotlightBusinessName?(input.spotlightOfferTitle?` This month, meet ${input.spotlightBusinessName} and see their Home Hive offer: ${input.spotlightOfferTitle}.`:` This month, we're spotlighting ${input.spotlightBusinessName}.`):'';
+ return{hiveUrl,emailSubject:input.spotlightBusinessName?`${input.sourceBusinessName}'s Home Hive spotlight: ${input.spotlightBusinessName}`:`Your trusted Home Hive from ${input.sourceBusinessName}`,emailText:`Hi ${input.firstName}, ${input.sourceBusinessName} is proud to be part of a trusted network of local home-service businesses${market}.${spotlight} Explore the entire Home Hive here: ${hiveUrl}`,smsText:`Hi ${input.firstName} — ${input.sourceBusinessName}'s trusted Home Hive${input.spotlightBusinessName?` is spotlighting ${input.spotlightBusinessName} this month`:''}. Explore the network${input.spotlightOfferTitle?` + ${input.spotlightOfferTitle}`:''}: ${hiveUrl}`};
 }
