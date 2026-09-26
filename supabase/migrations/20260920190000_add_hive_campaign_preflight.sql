@@ -179,6 +179,25 @@ end $function$;
 revoke all on function public.snapshot_hive_campaign_members(uuid) from public,anon,authenticated;
 grant execute on function public.snapshot_hive_campaign_members(uuid) to postgres,service_role;
 
+-- Once campaign participation is frozen, the Spotlight assignment is historical
+-- attribution evidence and must not be rewritten by later campaign edits.
+create or replace function public.protect_frozen_hive_campaign_spotlight()
+returns trigger language plpgsql set search_path='' as $function$
+begin
+ if old.audience_frozen_at is not null and
+    (new.spotlight_business_id is distinct from old.spotlight_business_id or
+     new.spotlight_offer_id is distinct from old.spotlight_offer_id) then
+  raise exception 'Frozen campaign Spotlight assignment cannot be changed';
+ end if;
+ return new;
+end $function$;
+revoke all on function public.protect_frozen_hive_campaign_spotlight() from public,anon,authenticated;
+
+drop trigger if exists protect_frozen_hive_campaign_spotlight on public.hive_campaigns;
+create trigger protect_frozen_hive_campaign_spotlight
+before update of spotlight_business_id,spotlight_offer_id on public.hive_campaigns
+for each row execute function public.protect_frozen_hive_campaign_spotlight();
+
 -- Service-only campaign offer check. Public click handling needs to recognize the
 -- campaign's recorded Spotlight offer without broad campaign-table visibility.
 create or replace function public.is_hive_campaign_spotlight_offer(p_campaign_id uuid,p_business_id uuid,p_offer_id uuid)
