@@ -274,11 +274,19 @@ create unique index if not exists hives_market_sequence_uq
  where market_key is not null and market_sequence is not null;
 
 create or replace function public.next_hive_market_sequence(p_market_key text)
-returns integer language sql security invoker set search_path='' volatile
+returns integer language plpgsql security invoker set search_path='' volatile
 as $function$
- select coalesce(max(h.market_sequence),0)+1
- from public.hives h
- where lower(trim(h.market_key))=lower(trim(p_market_key)) and nullif(trim(p_market_key),'') is not null
+declare v_market_key text;v_sequence integer;
+begin
+ v_market_key:=lower(trim(p_market_key));
+ if nullif(v_market_key,'') is null then raise exception 'Market key is required'; end if;
+ -- Serialize sequence allocation per normalized market. The unique index remains
+ -- the final integrity guard; callers must allocate and insert in one transaction.
+ perform pg_advisory_xact_lock(hashtextextended('hh360:market-sequence:'||v_market_key,0));
+ select coalesce(max(h.market_sequence),0)+1 into v_sequence
+ from public.hives h where lower(trim(h.market_key))=v_market_key;
+ return v_sequence;
+end
 $function$;
 
 revoke all on function public.next_hive_market_sequence(text) from public,anon;
